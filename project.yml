@@ -1,0 +1,30 @@
+name: Echo
+options:
+  bundleIdPrefix: com.jonchambers
+  deploymentTarget:
+    iOS: "17.0"
+
+packages:
+  Supabase:
+    url: https://github.com/supabase-community/supabase-swift
+    from: 2.0.0
+
+targets:
+  Echo:
+    type: application
+    platform: iOS
+    sources:
+      - path: Echo
+    info:
+      path: Echo/Resources/Info.plist
+      properties:
+        UILaunchScreen: {}
+        NSMicrophoneUsageDescription: "Echo needs microphone access to record talks and sessions."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jonchambers.echo
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1,2"
+        DEVELOPMENT_ASSET_PATHS: ""
+    dependencies:
+      - package: Supabase
