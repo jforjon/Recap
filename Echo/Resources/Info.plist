@@ -20,6 +20,10 @@
 	<string>1</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Echo needs microphone access to record talks and sessions.</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>

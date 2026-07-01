@@ -20,11 +20,18 @@ targets:
       properties:
         UILaunchScreen: {}
         NSMicrophoneUsageDescription: "Echo needs microphone access to record talks and sessions."
+        SUPABASE_URL: $(SUPABASE_URL)
+        SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jonchambers.echo
         SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: "1,2"
         DEVELOPMENT_ASSET_PATHS: ""
+      configs:
+        Debug:
+          xcconfig: Echo/Resources/Secrets.xcconfig
+        Release:
+          xcconfig: Echo/Resources/Secrets.xcconfig
     dependencies:
       - package: Supabase
