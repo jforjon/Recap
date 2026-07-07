@@ -1,0 +1,301 @@
+import Foundation
+import Supabase
+
+/// Mirrors app/lib/storage.ts function-for-function.
+enum StorageService {
+    private static var db: SupabaseClient { SupabaseService.client }
+
+    private static func currentUserId() async throws -> UUID {
+        guard let session = try? await db.auth.session else {
+            throw StorageError.notAuthenticated()
+        }
+        return session.user.id
+    }
+
+    /// Trims a string and returns nil if the result is empty — mirrors nullableString() in storage.ts.
+    static func nullableString(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    // MARK: - Notes
+
+    static func saveNote(_ note: NoteInsert) async throws -> Note {
+        guard !note.title.isEmpty, !note.summary.isEmpty else {
+            throw StorageError(message: "Invalid data before insert — title or summary was empty")
+        }
+
+        return try await db.from("notes")
+            .insert(note)
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    static func getNotes() async throws -> [Note] {
+        let userId = try await currentUserId()
+        return try await db.from("notes")
+            .select()
+            .eq("user_id", value: userId)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+    }
+
+    /// Same query as getNotes() — kept as a separate name to mirror storage.ts's getStandaloneNotes().
+    static func getStandaloneNotes() async throws -> [Note] {
+        try await getNotes()
+    }
+
+    static func getNoteById(_ id: UUID) async throws -> Note {
+        do {
+            return try await db.from("notes")
+                .select()
+                .eq("id", value: id)
+                .single()
+                .execute()
+                .value
+        } catch {
+            throw StorageError.notFound("Note", id: id)
+        }
+    }
+
+    static func getNotesByProjectId(_ projectId: UUID) async throws -> [Note] {
+        let userId = try await currentUserId()
+        return try await db.from("notes")
+            .select()
+            .eq("user_id", value: userId)
+            .eq("project_id", value: projectId)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
+    }
+
+    /// `fields` mirrors Partial<Note> in storage.ts — only the keys present are updated.
+    static func updateNote(_ id: UUID, fields: JSONObject) async throws -> Note {
+        guard !fields.isEmpty else {
+            throw StorageError.emptyPayload("Update note")
+        }
+        do {
+            return try await db.from("notes")
+                .update(fields)
+                .eq("id", value: id)
+                .select()
+                .single()
+                .execute()
+                .value
+        } catch {
+            throw StorageError.notFound("Note", id: id)
+        }
+    }
+
+    static func deleteNote(_ id: UUID) async throws {
+        try await db.from("notes")
+            .delete()
+            .eq("id", value: id)
+            .execute()
+    }
+
+    // MARK: - Projects
+
+    static func createProject(name: String) async throws -> Project {
+        let userId = try await currentUserId()
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw StorageError(message: "Project name is required")
+        }
+
+        struct Payload: Encodable {
+            let userId: UUID
+            let name: String
+            enum CodingKeys: String, CodingKey {
+                case userId = "user_id"
+                case name
+            }
+        }
+
+        return try await db.from("projects")
+            .insert(Payload(userId: userId, name: trimmed))
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    static func getProjectById(_ id: UUID) async throws -> Project {
+        do {
+            return try await db.from("projects")
+                .select()
+                .eq("id", value: id)
+                .single()
+                .execute()
+                .value
+        } catch {
+            throw StorageError.notFound("Project", id: id)
+        }
+    }
+
+    static func getProjectsWithNoteCounts() async throws -> [ProjectWithNoteCount] {
+        let userId = try await currentUserId()
+
+        let projects: [Project] = try await db.from("projects")
+            .select()
+            .eq("user_id", value: userId)
+            .order("updated_at", ascending: false)
+            .execute()
+            .value
+
+        struct ProjectIdRow: Decodable {
+            let projectId: UUID?
+            enum CodingKeys: String, CodingKey {
+                case projectId = "project_id"
+            }
+        }
+
+        let noteRows: [ProjectIdRow] = try await db.from("notes")
+            .select("project_id")
+            .eq("user_id", value: userId)
+            .not("project_id", operator: .`is`, value: "null")
+            .execute()
+            .value
+
+        var counts: [UUID: Int] = [:]
+        for row in noteRows {
+            guard let projectId = row.projectId else { continue }
+            counts[projectId, default: 0] += 1
+        }
+
+        return projects.map { project in
+            ProjectWithNoteCount(project: project, noteCount: counts[project.id] ?? 0)
+        }
+    }
+
+    /// `fields` mirrors Partial<Pick<Project, 'name' | 'notes'>> in storage.ts.
+    static func updateProject(_ id: UUID, fields: JSONObject) async throws -> Project {
+        guard !fields.isEmpty else {
+            throw StorageError.emptyPayload("Update project")
+        }
+        do {
+            return try await db.from("projects")
+                .update(fields)
+                .eq("id", value: id)
+                .select()
+                .single()
+                .execute()
+                .value
+        } catch {
+            throw StorageError.notFound("Project", id: id)
+        }
+    }
+
+    static func deleteProject(_ id: UUID) async throws {
+        try await db.from("projects")
+            .delete()
+            .eq("id", value: id)
+            .execute()
+    }
+
+    // MARK: - User settings
+
+    static func getUserSettings() async throws -> UserSettings {
+        let userId = try await currentUserId()
+        let rows: [UserSettings] = try await db.from("user_settings")
+            .select("openai_api_key, anthropic_api_key")
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+
+        return rows.first ?? .empty
+    }
+
+    static func saveUserSettings(_ settings: UserSettings) async throws {
+        let userId = try await currentUserId()
+
+        struct Payload: Encodable {
+            let userId: UUID
+            let openaiApiKey: String?
+            let anthropicApiKey: String?
+            let updatedAt: String
+            enum CodingKeys: String, CodingKey {
+                case userId = "user_id"
+                case openaiApiKey = "openai_api_key"
+                case anthropicApiKey = "anthropic_api_key"
+                case updatedAt = "updated_at"
+            }
+        }
+
+        let payload = Payload(
+            userId: userId,
+            openaiApiKey: settings.openaiApiKey,
+            anthropicApiKey: settings.anthropicApiKey,
+            updatedAt: ISO8601DateFormatter().string(from: Date())
+        )
+
+        try await db.from("user_settings")
+            .upsert(payload)
+            .execute()
+    }
+
+    // MARK: - Personal notes
+
+    static func getPersonalNotes(_ projectId: UUID) async throws -> [PersonalNote] {
+        try await db.from("personal_notes")
+            .select()
+            .eq("project_id", value: projectId)
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+    }
+
+    static func createPersonalNote(
+        projectId: UUID,
+        content: String,
+        type: PersonalNoteType = .text
+    ) async throws -> PersonalNote {
+        let userId = try await currentUserId()
+
+        struct Payload: Encodable {
+            let projectId: UUID
+            let userId: UUID
+            let content: String
+            let type: PersonalNoteType
+            enum CodingKeys: String, CodingKey {
+                case projectId = "project_id"
+                case userId = "user_id"
+                case content
+                case type
+            }
+        }
+
+        return try await db.from("personal_notes")
+            .insert(Payload(projectId: projectId, userId: userId, content: content, type: type))
+            .select()
+            .single()
+            .execute()
+            .value
+    }
+
+    static func updatePersonalNote(_ id: UUID, content: String) async throws {
+        try await db.from("personal_notes")
+            .update(["content": AnyJSON.string(content)])
+            .eq("id", value: id)
+            .execute()
+    }
+
+    static func deletePersonalNote(_ id: UUID) async throws {
+        try await db.from("personal_notes")
+            .delete()
+            .eq("id", value: id)
+            .execute()
+    }
+
+    static func deleteAllPersonalNotes(projectId: UUID) async throws {
+        try await db.from("personal_notes")
+            .delete()
+            .eq("project_id", value: projectId)
+            .execute()
+    }
+}
