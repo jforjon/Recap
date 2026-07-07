@@ -22,8 +22,8 @@
 	<string>Echo needs microphone access to record talks and sessions.</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
+	<key>SUPABASE_PROJECT_REF</key>
+	<string>$(SUPABASE_PROJECT_REF)</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 </dict>

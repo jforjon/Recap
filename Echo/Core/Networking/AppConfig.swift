@@ -4,10 +4,11 @@ import Foundation
 enum AppConfig {
     static var supabaseURL: URL {
         guard
-            let raw = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_URL") as? String,
-            let url = URL(string: raw)
+            let ref = Bundle.main.object(forInfoDictionaryKey: "SUPABASE_PROJECT_REF") as? String,
+            !ref.isEmpty,
+            let url = URL(string: "https://\(ref).supabase.co")
         else {
-            fatalError("SUPABASE_URL is missing or invalid. Check Echo/Resources/Secrets.xcconfig.")
+            fatalError("SUPABASE_PROJECT_REF is missing. Check Echo/Resources/Secrets.xcconfig.")
         }
         return url
     }
