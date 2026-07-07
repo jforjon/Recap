@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// Wireframe only — logic is wired up, styling is intentionally plain for now.
+/// Wireframe only — logic is wired up, visual polish (fonts, exact colors) comes later.
 struct SignInView: View {
     let authManager: AuthManager
 
     @State private var email = ""
     @State private var password = ""
-    @State private var isSignUp = false
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
@@ -15,15 +14,18 @@ struct SignInView: View {
             Text("Echo")
                 .font(.largeTitle)
 
-            TextField("Email", text: $email)
-                .textContentType(.emailAddress)
-                .keyboardType(.emailAddress)
-                .autocapitalization(.none)
-                .textFieldStyle(.roundedBorder)
+            AppTextField(
+                title: "Email",
+                text: $email,
+                contentType: .emailAddress,
+                keyboardType: .emailAddress
+            )
 
-            SecureField("Password", text: $password)
-                .textContentType(isSignUp ? .newPassword : .password)
-                .textFieldStyle(.roundedBorder)
+            AppSecureField(
+                title: "Password",
+                text: $password,
+                contentType: .password
+            )
 
             if let errorMessage {
                 Text(errorMessage)
@@ -31,27 +33,28 @@ struct SignInView: View {
                     .font(.footnote)
             }
 
-            Button(isSignUp ? "Create account" : "Sign in") {
-                submit()
+            Button("Login") {
+                submit(signUp: false)
             }
+            .buttonStyle(.appPrimary)
             .disabled(isSubmitting || email.isEmpty || password.isEmpty)
 
-            Button(isSignUp ? "Have an account? Sign in" : "New here? Create an account") {
-                isSignUp.toggle()
-                errorMessage = nil
+            Button("Create an account") {
+                submit(signUp: true)
             }
-            .font(.footnote)
+            .buttonStyle(.appSecondary)
+            .disabled(isSubmitting || email.isEmpty || password.isEmpty)
         }
         .padding()
     }
 
-    private func submit() {
+    private func submit(signUp: Bool) {
         errorMessage = nil
         isSubmitting = true
         Task {
             defer { isSubmitting = false }
             do {
-                if isSignUp {
+                if signUp {
                     try await authManager.signUp(email: email, password: password)
                 } else {
                     try await authManager.signIn(email: email, password: password)
