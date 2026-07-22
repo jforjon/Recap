@@ -22,4 +22,17 @@ enum AppConfig {
         }
         return key
     }
+
+    /// Base URL for the Next.js app's API routes (/api/transcribe, /api/summarise, ...).
+    /// Change API_HOST in Secrets.xcconfig if the web app moves to a different host.
+    static var apiBaseURL: URL {
+        guard
+            let host = Bundle.main.object(forInfoDictionaryKey: "API_HOST") as? String,
+            !host.isEmpty,
+            let url = URL(string: "https://\(host)")
+        else {
+            fatalError("API_HOST is missing. Check Echo/Resources/Secrets.xcconfig.")
+        }
+        return url
+    }
 }

@@ -1,21 +1,21 @@
 import SwiftUI
 
-/// Wireframe only — replace with the real Library/Settings navigation once those screens exist.
 struct MainTabView: View {
     let authManager: AuthManager
+    @State private var recordingManager = RecordingManager()
 
     var body: some View {
-        TabView {
-            Text("Library — coming soon")
-                .tabItem { Label("Library", systemImage: "list.bullet") }
+        VStack(spacing: 0) {
+            TabView {
+                LibraryView(recordingManager: recordingManager)
+                    .tabItem { Label("Library", systemImage: "list.bullet") }
 
-            VStack(spacing: 16) {
-                Text("Settings — coming soon")
-                Button("Sign out") {
-                    Task { try? await authManager.signOut() }
-                }
+                SettingsView(authManager: authManager)
+                    .tabItem { Label("Settings", systemImage: "gearshape") }
             }
-            .tabItem { Label("Settings", systemImage: "gearshape") }
+
+            RecordingBarView(recordingManager: recordingManager)
+                .padding(.bottom, 8)
         }
     }
 }

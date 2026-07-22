@@ -20,8 +20,11 @@ targets:
       properties:
         UILaunchScreen: {}
         NSMicrophoneUsageDescription: "Echo needs microphone access to record talks and sessions."
+        UIBackgroundModes:
+          - audio
         SUPABASE_PROJECT_REF: $(SUPABASE_PROJECT_REF)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
+        API_HOST: $(API_HOST)
     configFiles:
       Debug: Echo/Resources/Secrets.xcconfig
       Release: Echo/Resources/Secrets.xcconfig
