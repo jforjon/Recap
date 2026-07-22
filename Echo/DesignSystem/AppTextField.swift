@@ -13,11 +13,11 @@ struct AppTextField: View {
             .keyboardType(keyboardType)
             .autocapitalization(.none)
             .disableAutocorrection(true)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, Spacing.md + 2)
+            .padding(.vertical, Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .strokeBorder(AppColor.border, lineWidth: 1)
             )
     }
 }
@@ -31,11 +31,11 @@ struct AppSecureField: View {
     var body: some View {
         SecureField(title, text: $text)
             .textContentType(contentType)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, Spacing.md + 2)
+            .padding(.vertical, Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .strokeBorder(AppColor.border, lineWidth: 1)
             )
     }
 }

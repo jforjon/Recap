@@ -28,6 +28,13 @@ struct LibraryView: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    Task { await deleteProject(item.project.id) }
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 }
@@ -41,6 +48,13 @@ struct LibraryView: View {
                         NavigationLink(value: note) {
                             noteRow(note)
                         }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                Task { await deleteNote(note.id) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
                     }
                 }
 
@@ -50,7 +64,7 @@ struct LibraryView: View {
                     }
                     .buttonStyle(.appSecondary)
                     .listRowInsets(EdgeInsets())
-                    .padding(.vertical, 4)
+                    .padding(.vertical, Spacing.xs)
                 }
             }
             .navigationTitle("Library")
@@ -118,6 +132,26 @@ struct LibraryView: View {
             await load()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteNote(_ id: UUID) async {
+        notes.removeAll { $0.id == id }
+        do {
+            try await StorageService.deleteNote(id)
+        } catch {
+            errorMessage = error.localizedDescription
+            await load()
+        }
+    }
+
+    private func deleteProject(_ id: UUID) async {
+        projects.removeAll { $0.project.id == id }
+        do {
+            try await StorageService.deleteProject(id)
+        } catch {
+            errorMessage = error.localizedDescription
+            await load()
         }
     }
 }

@@ -5,14 +5,14 @@ struct AppCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
             content
         }
-        .padding(12)
+        .padding(Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .fill(AppColor.cardBackground)
         )
     }
 }
@@ -30,10 +30,10 @@ struct AppChip: View {
             Text(text)
                 .font(.caption.monospaced())
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, Spacing.sm)
         .padding(.vertical, 2)
         .background(
-            Capsule().strokeBorder(Color.primary.opacity(0.15), lineWidth: 1)
+            Capsule().strokeBorder(AppColor.border, lineWidth: 1)
         )
     }
 }

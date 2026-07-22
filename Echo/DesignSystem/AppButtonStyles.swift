@@ -6,10 +6,10 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, Spacing.md + 2)
             .background(Color.primary)
             .foregroundStyle(Color(uiColor: .systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
             .opacity(configuration.isPressed ? 0.85 : 1)
     }
 }
@@ -20,11 +20,11 @@ struct SecondaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.body.weight(.medium))
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, Spacing.md + 2)
             .foregroundStyle(Color.primary)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.25), lineWidth: 1)
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .strokeBorder(AppColor.borderStrong, lineWidth: 1)
             )
             .opacity(configuration.isPressed ? 0.6 : 1)
     }
