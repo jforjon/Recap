@@ -11,42 +11,43 @@ struct SettingsView: View {
     @State private var savedMessage: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Account") {
-                    Text(email)
-                        .foregroundStyle(.secondary)
+        Form {
+            Section("Account") {
+                Text(email)
+                    .appTextStyle(.body)
+                    .foregroundStyle(AppColors.neutral600)
+            }
+
+            Section("API keys") {
+                AppSecureField(title: "OpenAI (Whisper)", text: $openaiKey)
+                AppSecureField(title: "Anthropic (Claude)", text: $anthropicKey)
+
+                Button(isSaving ? "Saving…" : "Save keys") {
+                    Task { await saveKeys() }
                 }
+                .buttonStyle(.appPrimary)
+                .disabled(isSaving)
 
-                Section("API keys") {
-                    AppSecureField(title: "OpenAI (Whisper)", text: $openaiKey)
-                    AppSecureField(title: "Anthropic (Claude)", text: $anthropicKey)
-
-                    Button(isSaving ? "Saving…" : "Save keys") {
-                        Task { await saveKeys() }
-                    }
-                    .buttonStyle(.appPrimary)
-                    .disabled(isSaving)
-
-                    if let savedMessage {
-                        Text(savedMessage).foregroundStyle(.green).font(.footnote)
-                    }
-                }
-
-                Section {
-                    Button("Sign out", role: .destructive) {
-                        Task { try? await authManager.signOut() }
-                    }
-                    .buttonStyle(.appSecondary)
+                if let savedMessage {
+                    Text(savedMessage)
+                        .foregroundStyle(AppColors.success500)
+                        .appTextStyle(.small)
                 }
             }
-            .navigationTitle("Settings")
-            .task { await load() }
-            .alert("Error", isPresented: .constant(errorMessage != nil)) {
-                Button("OK") { errorMessage = nil }
-            } message: {
-                Text(errorMessage ?? "")
+
+            Section {
+                Button("Sign out", role: .destructive) {
+                    Task { try? await authManager.signOut() }
+                }
+                .buttonStyle(.appSecondary)
             }
+        }
+        .navigationTitle("Settings")
+        .task { await load() }
+        .alert("Error", isPresented: .constant(errorMessage != nil)) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
         }
     }
 

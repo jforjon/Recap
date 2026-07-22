@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Wireframe only — logic is wired up, visual polish (fonts, exact colors) comes later.
 struct SignInView: View {
     let authManager: AuthManager
 
@@ -10,9 +9,10 @@ struct SignInView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Echo")
-                .font(.largeTitle)
+        VStack(spacing: Spacing.lg) {
+            Text("echo")
+                .appTextStyle(.display)
+                .foregroundStyle(AppColors.neutral800)
 
             AppTextField(
                 title: "Email",
@@ -29,8 +29,8 @@ struct SignInView: View {
 
             if let errorMessage {
                 Text(errorMessage)
-                    .foregroundStyle(.red)
-                    .font(.footnote)
+                    .foregroundStyle(AppColors.error500)
+                    .appTextStyle(.small)
             }
 
             Button("Login") {
@@ -45,7 +45,8 @@ struct SignInView: View {
             .buttonStyle(.appSecondary)
             .disabled(isSubmitting || email.isEmpty || password.isEmpty)
         }
-        .padding()
+        .padding(Spacing.lg)
+        .background(AppColors.neutral100)
     }
 
     private func submit(signUp: Bool) {

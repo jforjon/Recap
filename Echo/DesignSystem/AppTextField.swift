@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Standard single-line text input — mirrors .field__input in the web app.
+/// Standard single-line text input — 1:1 port of .field__input in components.css.
 struct AppTextField: View {
     let title: String
     @Binding var text: String
@@ -13,11 +13,15 @@ struct AppTextField: View {
             .keyboardType(keyboardType)
             .autocapitalization(.none)
             .disableAutocorrection(true)
-            .padding(.horizontal, Spacing.md + 2)
-            .padding(.vertical, Spacing.md)
-            .background(
+            .appTextStyle(.body)
+            .foregroundStyle(AppColors.neutral800)
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, 6)
+            .frame(minHeight: 44)
+            .background(AppColors.neutral0)
+            .overlay(
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    .strokeBorder(AppColor.border, lineWidth: 1)
+                    .strokeBorder(AppColors.neutral300, lineWidth: 0.5)
             )
     }
 }
@@ -31,11 +35,15 @@ struct AppSecureField: View {
     var body: some View {
         SecureField(title, text: $text)
             .textContentType(contentType)
-            .padding(.horizontal, Spacing.md + 2)
-            .padding(.vertical, Spacing.md)
-            .background(
+            .appTextStyle(.body)
+            .foregroundStyle(AppColors.neutral800)
+            .padding(.horizontal, Spacing.s3)
+            .padding(.vertical, 6)
+            .frame(minHeight: 44)
+            .background(AppColors.neutral0)
+            .overlay(
                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                    .strokeBorder(AppColor.border, lineWidth: 1)
+                    .strokeBorder(AppColors.neutral300, lineWidth: 0.5)
             )
     }
 }

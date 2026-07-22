@@ -10,7 +10,7 @@ struct ContentView: View {
         case .signedOut:
             SignInView(authManager: authManager)
         case .signedIn:
-            MainTabView(authManager: authManager)
+            AppShellView(authManager: authManager)
         }
     }
 }

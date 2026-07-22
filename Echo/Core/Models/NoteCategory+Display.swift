@@ -11,9 +11,9 @@ extension NoteCategory {
 
     var dotColor: Color {
         switch self {
-        case .talk: return .blue
-        case .training: return .green
-        case .panel: return .orange
+        case .talk: return AppColors.categoryTalk
+        case .training: return AppColors.categoryTraining
+        case .panel: return AppColors.categoryPanel
         }
     }
 }

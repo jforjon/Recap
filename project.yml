@@ -22,6 +22,11 @@ targets:
         NSMicrophoneUsageDescription: "Echo needs microphone access to record talks and sessions."
         UIBackgroundModes:
           - audio
+        UIAppFonts:
+          - DMSans-Regular.ttf
+          - DMSans-Medium.ttf
+          - RobotoMono-Regular.ttf
+          - RobotoMono-Medium.ttf
         SUPABASE_PROJECT_REF: $(SUPABASE_PROJECT_REF)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
         API_HOST: $(API_HOST)

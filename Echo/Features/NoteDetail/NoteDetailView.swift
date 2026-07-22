@@ -3,8 +3,7 @@ import Supabase
 
 struct NoteDetailView: View {
     let noteId: UUID
-
-    @Environment(\.dismiss) private var dismiss
+    let nav: AppNavigationModel
 
     @State private var note: Note?
     @State private var isLoading = true
@@ -14,14 +13,14 @@ struct NoteDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var showMoveToProject = false
     @State private var projects: [ProjectWithNoteCount] = []
-    @State private var isDeleting = false
 
     var body: some View {
         ScrollView {
             if let note {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     Text(note.title)
-                        .font(.title2.weight(.semibold))
+                        .appTextStyle(.heading)
+                        .foregroundStyle(AppColors.neutral800)
 
                     HStack {
                         Picker("Category", selection: categoryBinding) {
@@ -33,14 +32,14 @@ struct NoteDetailView: View {
                         .pickerStyle(.menu)
                         Spacer()
                         Text(formatShortDate(note.createdAt))
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .appTextStyle(.mono)
+                            .foregroundStyle(AppColors.neutral500)
                     }
 
                     VStack(alignment: .leading, spacing: Spacing.sm) {
                         Text("SPEAKER & CONTEXT")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .appTextStyle(.label)
+                            .foregroundStyle(AppColors.neutral600)
                         AppTextField(title: "Speaker, role, event context…", text: $speakerContextDraft)
                         Button(isSavingSpeakerContext ? "Saving…" : "Save") {
                             Task { await saveSpeakerContext() }
@@ -49,10 +48,11 @@ struct NoteDetailView: View {
                         .disabled(isSavingSpeakerContext)
                     }
 
-                    Divider()
+                    Divider().background(AppColors.neutral300)
 
                     Text(note.summary)
-                        .font(.body)
+                        .appTextStyle(.body)
+                        .foregroundStyle(AppColors.neutral800)
                 }
                 .padding()
             } else if isLoading {
@@ -167,11 +167,9 @@ struct NoteDetailView: View {
     }
 
     private func deleteNote() async {
-        isDeleting = true
-        defer { isDeleting = false }
         do {
             try await StorageService.deleteNote(noteId)
-            dismiss()
+            nav.detailSelection = nil
         } catch {
             errorMessage = error.localizedDescription
         }

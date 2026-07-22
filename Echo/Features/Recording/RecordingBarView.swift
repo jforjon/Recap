@@ -18,35 +18,43 @@ struct RecordingBarView: View {
                 .disabled(isStarting)
 
             case .recording:
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.s3) {
                     Button {
                         recordingManager.discardRecording()
                     } label: {
                         Image(systemName: "trash")
                     }
+                    .buttonStyle(.appIcon)
+
+                    RecordingWaveformView()
 
                     Text(formattedElapsed)
-                        .font(.callout.monospaced())
-                        .frame(maxWidth: .infinity)
+                        .appTextStyle(.mono)
+                        .foregroundStyle(AppColors.neutral600)
+                        .frame(minWidth: 36, alignment: .trailing)
 
                     Button {
                         recordingManager.stopRecording()
                     } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
+                        Image(systemName: "arrow.up")
+                            .fontWeight(.semibold)
                     }
+                    .frame(width: 36, height: 36)
+                    .background(AppColors.neutral900)
+                    .foregroundStyle(AppColors.neutral0)
+                    .clipShape(Circle())
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, Spacing.s4)
+                .padding(.vertical, Spacing.s4)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color(uiColor: .secondarySystemBackground))
+                    Color.clear.background(.ultraThinMaterial)
                 )
+                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             }
         }
-        .padding(.horizontal)
+        .padding(.horizontal, Spacing.s4)
         .alert("API keys required", isPresented: $showKeysAlert) {
-            Button("OK", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
             Text("Add your OpenAI and Anthropic API keys in Settings to start recording.")
         }

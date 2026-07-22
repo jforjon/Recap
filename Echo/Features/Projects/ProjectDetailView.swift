@@ -5,8 +5,7 @@ import Supabase
 struct ProjectDetailView: View {
     let projectId: UUID
     let recordingManager: RecordingManager
-
-    @Environment(\.dismiss) private var dismiss
+    let nav: AppNavigationModel
 
     @State private var project: Project?
     @State private var notes: [Note] = []
@@ -25,31 +24,36 @@ struct ProjectDetailView: View {
             Section("Recordings") {
                 if notes.isEmpty && !isLoading {
                     Text("No recordings yet.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColors.neutral500)
                 }
                 ForEach(notes) { note in
-                    NavigationLink(value: note) {
+                    Button {
+                        nav.detailSelection = .note(note.id)
+                    } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             if let category = note.category {
                                 AppChip(text: category.displayText, dotColor: category.dotColor)
                             }
-                            Text(note.title).font(.body.weight(.medium))
+                            Text(note.title)
+                                .appTextStyle(.bodyMedium)
+                                .foregroundStyle(AppColors.neutral800)
                         }
                     }
+                    .buttonStyle(.plain)
                     .swipeActions(edge: .trailing) {
                         Button {
                             Task { await removeFromProject(note.id) }
                         } label: {
                             Label("Remove", systemImage: "minus.circle")
                         }
-                        .tint(.orange)
+                        .tint(AppColors.warning500)
                     }
                 }
             }
 
             Section("Personal notes") {
-                NavigationLink("Open personal notes") {
-                    PersonalNotesView(projectId: projectId, projectName: project?.name ?? "")
+                Button("Open personal notes") {
+                    nav.detailSelection = .personalNotes(projectId: projectId, projectName: project?.name ?? "")
                 }
                 Button("Delete all personal notes", role: .destructive) {
                     showDeletePersonalNotesConfirm = true
@@ -59,10 +63,11 @@ struct ProjectDetailView: View {
             Section {
                 if let summary = project?.notes, !summary.isEmpty {
                     Text(summary)
-                        .font(.body)
+                        .appTextStyle(.body)
+                        .foregroundStyle(AppColors.neutral800)
                 } else {
                     Text("No summary yet.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(AppColors.neutral500)
                 }
                 Button(isGeneratingSummary ? "Generating…" : (project?.notes?.isEmpty == false ? "Update summary" : "Generate summary")) {
                     Task { await generateSummary() }
@@ -110,9 +115,6 @@ struct ProjectDetailView: View {
                     Image(systemName: "ellipsis.circle")
                 }
             }
-        }
-        .navigationDestination(for: Note.self) { note in
-            NoteDetailView(noteId: note.id)
         }
         .task { await load() }
         .refreshable { await load() }
@@ -206,7 +208,8 @@ struct ProjectDetailView: View {
     private func deleteProject() async {
         do {
             try await StorageService.deleteProject(projectId)
-            dismiss()
+            nav.detailSelection = nil
+            nav.sidebarSelection = .library
         } catch {
             errorMessage = error.localizedDescription
         }

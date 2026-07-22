@@ -23,18 +23,21 @@ struct PersonalNotesView: View {
                 ForEach(notes) { note in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(note.content)
+                            .appTextStyle(.body)
+                            .foregroundStyle(AppColors.neutral800)
                         HStack {
                             if note.type == .voice {
                                 Label("Voice", systemImage: "mic.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .appTextStyle(.mono)
+                                    .foregroundStyle(AppColors.neutral500)
                             }
                             Spacer()
                             Text(formatShortDate(note.createdAt))
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
+                                .appTextStyle(.mono)
+                                .foregroundStyle(AppColors.neutral500)
                         }
                     }
+                    .listRowBackground(AppColors.neutral200)
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             Task { await delete(note.id) }
