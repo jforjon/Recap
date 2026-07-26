@@ -14,4 +14,4 @@ DerivedData/
 .swiftpm/
 
 # Secrets
-Echo/Resources/Secrets.xcconfig
+**/Secrets.xcconfig
