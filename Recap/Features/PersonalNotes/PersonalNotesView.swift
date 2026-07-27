@@ -22,9 +22,7 @@ struct PersonalNotesView: View {
             List {
                 ForEach(notes) { note in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(note.content)
-                            .appTextStyle(.body)
-                            .foregroundStyle(AppColors.neutral800)
+                        MarkdownText(markdown: note.content)
                         HStack {
                             if note.type == .voice {
                                 Label("Voice", systemImage: "mic.fill")

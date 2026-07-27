@@ -43,6 +43,19 @@ struct DestructiveButtonStyle: ButtonStyle {
     }
 }
 
+/// Compact outlined pill that hugs its label width.
+struct SmallSecondaryButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .appTextStyle(.bodyMedium)
+            .frame(minHeight: 40)
+            .padding(.horizontal, Spacing.s6)
+            .foregroundStyle(AppColors.textPrimary)
+            .background(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.6 : 1)
+    }
+}
+
 /// Compact filled amber pill.
 struct SmallPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -84,6 +97,10 @@ extension ButtonStyle where Self == DestructiveButtonStyle {
 
 extension ButtonStyle where Self == SmallPrimaryButtonStyle {
     static var appPrimarySmall: SmallPrimaryButtonStyle { SmallPrimaryButtonStyle() }
+}
+
+extension ButtonStyle where Self == SmallSecondaryButtonStyle {
+    static var appSecondarySmall: SmallSecondaryButtonStyle { SmallSecondaryButtonStyle() }
 }
 
 extension ButtonStyle where Self == IconButtonStyle {

@@ -14,9 +14,7 @@ struct SignInView: View {
 
             VStack(alignment: .leading, spacing: Spacing.s7) {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(AppColors.accent)
-                        .frame(width: 44, height: 44)
+                    logoMark
                     Text("recap")
                         .font(AppFont.sans(40, medium: true))
                         .tracking(-1.2)
@@ -75,6 +73,17 @@ struct SignInView: View {
             .padding(Spacing.s6)
             .frame(maxWidth: 440)
         }
+    }
+
+    /// The recap mark — three decaying amber bars, matching the app icon.
+    private var logoMark: some View {
+        VStack(spacing: 5) {
+            Capsule().fill(AppColors.accent).frame(width: 46, height: 7)
+            Capsule().fill(AppColors.accent.opacity(0.58)).frame(width: 32, height: 7)
+            Capsule().fill(AppColors.accent.opacity(0.30)).frame(width: 18, height: 7)
+        }
+        .frame(width: 46, alignment: .leading)
+        .padding(.bottom, Spacing.s1)
     }
 
     private func fieldLabel(_ text: String) -> some View {

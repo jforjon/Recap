@@ -27,6 +27,29 @@ struct AppTextField: View {
     }
 }
 
+/// Multi-line text area on a charcoal surface — grows with content.
+struct AppTextArea: View {
+    let title: String
+    @Binding var text: String
+    var minHeight: CGFloat = 96
+
+    var body: some View {
+        TextField(title, text: $text, axis: .vertical)
+            .lineLimit(3...10)
+            .appTextStyle(.body)
+            .foregroundStyle(AppColors.textPrimary)
+            .tint(AppColors.accent)
+            .padding(Spacing.s4)
+            .frame(minHeight: minHeight, alignment: .topLeading)
+            .background(AppColors.surface)
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.input, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.07), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: Radius.input, style: .continuous))
+    }
+}
+
 /// Secure input (passwords / API keys) — same treatment as `AppTextField`.
 struct AppSecureField: View {
     let title: String

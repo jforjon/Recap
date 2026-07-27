@@ -97,6 +97,7 @@ struct LibraryContentView: View {
         .recapBackground()
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

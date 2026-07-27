@@ -61,9 +61,7 @@ struct ProjectDetailView: View {
 
             Section {
                 if let summary = project?.notes, !summary.isEmpty {
-                    Text(summary)
-                        .appTextStyle(.body)
-                        .foregroundStyle(AppColors.neutral800)
+                    MarkdownText(markdown: summary)
                 } else {
                     Text("No summary yet.")
                         .foregroundStyle(AppColors.neutral500)
@@ -111,6 +109,7 @@ struct ProjectDetailView: View {
                     } label: {
                         Label("Delete project", systemImage: "trash")
                     }
+                    .tint(AppColors.destructive)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }

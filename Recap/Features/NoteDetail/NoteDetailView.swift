@@ -10,6 +10,7 @@ struct NoteDetailView: View {
     @State private var errorMessage: String?
     @State private var speakerContextDraft = ""
     @State private var isSavingSpeakerContext = false
+    @State private var isEditingSpeakerContext = false
     @State private var isGeneratingSummary = false
     @State private var showDeleteConfirm = false
     @State private var showMoveToProject = false
@@ -19,8 +20,9 @@ struct NoteDetailView: View {
     @State private var isSavingProject = false
 
     var body: some View {
-        ScrollView {
+        Group {
             if let note {
+                ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.lg) {
                     Text(note.title)
                         .appTextStyle(.heading)
@@ -40,17 +42,7 @@ struct NoteDetailView: View {
                             .foregroundStyle(AppColors.neutral500)
                     }
 
-                    VStack(alignment: .leading, spacing: Spacing.sm) {
-                        Text("SPEAKER & CONTEXT")
-                            .appTextStyle(.label)
-                            .foregroundStyle(AppColors.neutral600)
-                        AppTextField(title: "Speaker, role, event context…", text: $speakerContextDraft)
-                        Button(isSavingSpeakerContext ? "Saving…" : "Save") {
-                            Task { await saveSpeakerContext() }
-                        }
-                        .buttonStyle(.appSecondary)
-                        .disabled(isSavingSpeakerContext)
-                    }
+                    speakerSection(note)
 
                     Divider().background(AppColors.neutral300)
 
@@ -70,12 +62,18 @@ struct NoteDetailView: View {
                     }
                 }
                 .padding()
+                }
+                .recapBackground()
             } else if isLoading {
                 ProgressView()
-                    .padding()
+                    .controlSize(.large)
+                    .tint(AppColors.accent)
+            } else {
+                loadErrorState
             }
         }
-        .recapBackground()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -86,11 +84,13 @@ struct NoteDetailView: View {
                     } label: {
                         Label("Move to project", systemImage: "folder")
                     }
+                    .tint(AppColors.textPrimary)
                     Button(role: .destructive) {
                         showDeleteConfirm = true
                     } label: {
                         Label("Delete note", systemImage: "trash")
                     }
+                    .tint(AppColors.destructive)
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -170,6 +170,52 @@ struct NoteDetailView: View {
         newProjectName = ""
     }
 
+    /// Read mode by default: shows the saved speaker & context with an Edit/Add
+    /// affordance; tapping it reveals the field + Save/Cancel.
+    @ViewBuilder
+    private func speakerSection(_ note: Note) -> some View {
+        let context = (note.speakerContext ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack {
+                Text("SPEAKER & CONTEXT")
+                    .appTextStyle(.label)
+                    .foregroundStyle(AppColors.neutral600)
+                Spacer()
+                if !isEditingSpeakerContext {
+                    Button(context.isEmpty ? "Add" : "Edit") {
+                        speakerContextDraft = context
+                        isEditingSpeakerContext = true
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AppColors.accent)
+                }
+            }
+
+            if isEditingSpeakerContext {
+                AppTextArea(title: "Speaker, role, event context…", text: $speakerContextDraft)
+                HStack(spacing: Spacing.s5) {
+                    Spacer()
+                    Button("Cancel") {
+                        speakerContextDraft = context
+                        isEditingSpeakerContext = false
+                    }
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(AppColors.textSecondary)
+
+                    Button(isSavingSpeakerContext ? "Saving…" : "Save") {
+                        Task { await saveSpeakerContext() }
+                    }
+                    .buttonStyle(.appSecondarySmall)
+                    .disabled(isSavingSpeakerContext)
+                }
+            } else {
+                Text(context.isEmpty ? "No speaker or context added." : context)
+                    .appTextStyle(.body)
+                    .foregroundStyle(context.isEmpty ? AppColors.neutral500 : AppColors.neutral800)
+            }
+        }
+    }
+
     @ViewBuilder
     private func summarySection(_ note: Note) -> some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -177,10 +223,9 @@ struct NoteDetailView: View {
                 .appTextStyle(.label)
                 .foregroundStyle(AppColors.neutral600)
 
-            if !note.summary.isEmpty {
-                Text(note.summary)
-                    .appTextStyle(.body)
-                    .foregroundStyle(AppColors.neutral800)
+            let summary = note.summary ?? ""
+            if !summary.isEmpty {
+                MarkdownText(markdown: summary)
             } else {
                 Text("No summary yet. Generate one with AI when you want it.")
                     .appTextStyle(.body)
@@ -189,7 +234,7 @@ struct NoteDetailView: View {
 
             Button(isGeneratingSummary
                    ? "Generating…"
-                   : (note.summary.isEmpty ? "Generate summary" : "Regenerate summary")) {
+                   : (summary.isEmpty ? "Generate summary" : "Regenerate summary")) {
                 Task { await generateSummary() }
             }
             .buttonStyle(.appSecondary)
@@ -199,6 +244,22 @@ struct NoteDetailView: View {
 
     private func transcriptText(_ note: Note) -> String {
         (note.transcript ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var loadErrorState: some View {
+        VStack(spacing: Spacing.s3) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 34))
+                .foregroundStyle(AppColors.textTertiary)
+            Text("This recording couldn't be loaded.")
+                .appTextStyle(.body)
+                .foregroundStyle(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
+            Button("Try again") { Task { await load() } }
+                .buttonStyle(.appSecondary)
+                .frame(maxWidth: 200)
+        }
+        .padding(Spacing.s6)
     }
 
     private var categoryBinding: Binding<NoteCategory?> {
@@ -212,6 +273,10 @@ struct NoteDetailView: View {
 
     private func load() async {
         isLoading = true
+        errorMessage = nil
+        // `defer` guarantees the spinner is cleared even if the request is
+        // cancelled (SwiftUI restarting the .task) — otherwise it spins forever.
+        defer { isLoading = false }
         do {
             let loaded = try await StorageService.getNoteById(noteId)
             note = loaded
@@ -220,7 +285,6 @@ struct NoteDetailView: View {
             if error.isCancellation { return }
             errorMessage = error.localizedDescription
         }
-        isLoading = false
     }
 
     private func loadProjects() async {
@@ -275,6 +339,7 @@ struct NoteDetailView: View {
             let trimmed = speakerContextDraft.trimmingCharacters(in: .whitespacesAndNewlines)
             let fields: JSONObject = ["speaker_context": trimmed.isEmpty ? .null : .string(trimmed)]
             note = try await StorageService.updateNote(noteId, fields: fields)
+            isEditingSpeakerContext = false
         } catch {
             if error.isCancellation { return }
             errorMessage = error.localizedDescription

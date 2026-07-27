@@ -14,20 +14,20 @@ struct AppShellView: View {
         } detail: {
             detail
         }
-        // Attached to the split view itself (not the sidebar) so it stays visible
-        // no matter which column is showing — including on iPhone, where the
-        // sidebar collapses away entirely once something is selected.
-        .safeAreaInset(edge: .bottom) {
-            RecordingBarView(recordingManager: recordingManager)
-                .padding(.top, Spacing.s3)
-                .padding(.bottom, Spacing.s2)
-                .background(
-                    AppColors.bar
-                        .overlay(AppColors.separator.frame(height: 1), alignment: .top)
-                        .ignoresSafeArea(edges: .bottom)
-                )
-        }
         .tint(AppColors.accent)
+    }
+
+    /// The persistent "Start recording" bar. Attached only to the Library screen
+    /// (below), so it doesn't appear on Settings, project, or note screens.
+    private var recordingBar: some View {
+        RecordingBarView(recordingManager: recordingManager)
+            .padding(.top, Spacing.s3)
+            .padding(.bottom, Spacing.s2)
+            .background(
+                AppColors.bar
+                    .overlay(AppColors.separator.frame(height: 1), alignment: .top)
+                    .ignoresSafeArea(edges: .bottom)
+            )
     }
 
     private var sidebar: some View {
@@ -65,6 +65,7 @@ struct AppShellView: View {
         switch nav.sidebarSelection {
         case .none, .library:
             LibraryContentView(nav: nav, authManager: authManager)
+                .safeAreaInset(edge: .bottom) { recordingBar }
         case .project(let id):
             ProjectDetailView(projectId: id, recordingManager: recordingManager, nav: nav)
         }

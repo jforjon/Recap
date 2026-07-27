@@ -18,7 +18,7 @@ struct Note: Codable, Identifiable, Hashable {
     var category: NoteCategory?
     var personalReaction: String?
     var reactionType: ReactionType?
-    var summary: String
+    var summary: String?
     var transcript: String?
     let createdAt: String
 
