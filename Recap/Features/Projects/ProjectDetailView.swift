@@ -117,27 +117,17 @@ struct ProjectDetailView: View {
         }
         .task { await load() }
         .refreshable { await load() }
-        .confirmationDialog(
-            "Delete this project and all its recordings? This cannot be undone.",
-            isPresented: $showDeleteProjectConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert("Delete project?", isPresented: $showDeleteProjectConfirm) {
             Button("Delete", role: .destructive) { Task { await deleteProject() } }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This deletes the project and all its recordings. This can't be undone.")
         }
-        .confirmationDialog(
-            "Delete the summary?",
-            isPresented: $showDeleteSummaryConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert("Delete summary?", isPresented: $showDeleteSummaryConfirm) {
             Button("Delete", role: .destructive) { Task { await deleteSummary() } }
             Button("Cancel", role: .cancel) {}
         }
-        .confirmationDialog(
-            "Delete all personal notes?",
-            isPresented: $showDeletePersonalNotesConfirm,
-            titleVisibility: .visible
-        ) {
+        .alert("Delete all personal notes?", isPresented: $showDeletePersonalNotesConfirm) {
             Button("Delete", role: .destructive) { Task { await deleteAllPersonalNotes() } }
             Button("Cancel", role: .cancel) {}
         }

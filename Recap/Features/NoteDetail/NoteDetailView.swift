@@ -97,9 +97,11 @@ struct NoteDetailView: View {
             }
         }
         .task { await load() }
-        .confirmationDialog("Delete this note? This cannot be undone.", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+        .alert("Delete note?", isPresented: $showDeleteConfirm) {
             Button("Delete", role: .destructive) { Task { await deleteNote() } }
             Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This can't be undone.")
         }
         .sheet(isPresented: $showMoveToProject, onDismiss: resetMoveToProjectState) {
             NavigationStack {

@@ -42,6 +42,7 @@ struct PersonalNotesView: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
+                        .tint(AppColors.destructive)
                     }
                 }
             }
@@ -69,7 +70,7 @@ struct PersonalNotesView: View {
             }
         }
         .task { await load() }
-        .confirmationDialog("Delete all personal notes?", isPresented: $showDeleteAllConfirm, titleVisibility: .visible) {
+        .alert("Delete all personal notes?", isPresented: $showDeleteAllConfirm) {
             Button("Delete", role: .destructive) { Task { await deleteAll() } }
             Button("Cancel", role: .cancel) {}
         }

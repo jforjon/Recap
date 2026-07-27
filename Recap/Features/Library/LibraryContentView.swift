@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 struct LibraryContentView: View {
     let nav: AppNavigationModel
@@ -17,6 +18,7 @@ struct LibraryContentView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showSettings = false
+    @State private var showNewProject = false
     @State private var pendingDeleteProject: ProjectWithNoteCount?
 
     var body: some View {
@@ -72,6 +74,7 @@ struct LibraryContentView: View {
                             } label: {
                                 Label("Delete project", systemImage: "trash")
                             }
+                            .tint(AppColors.destructive)
                         }
                     }
                 }
@@ -88,6 +91,7 @@ struct LibraryContentView: View {
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
+                                .tint(AppColors.destructive)
                             }
                     }
                 }
@@ -101,6 +105,14 @@ struct LibraryContentView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
+                    showNewProject = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                }
+                .tint(AppColors.textBright)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
                     showSettings = true
                 } label: {
                     Image(systemName: "gearshape")
@@ -111,21 +123,25 @@ struct LibraryContentView: View {
         .navigationDestination(isPresented: $showSettings) {
             SettingsView(authManager: authManager)
         }
-        .confirmationDialog(
-            "Delete this project? Its recordings stay in your Library; personal notes are deleted.",
+        .sheet(isPresented: $showNewProject) {
+            NewProjectSheet(standaloneNotes: notes) {
+                nav.projectsVersion += 1
+            }
+        }
+        .alert(
+            "Delete project?",
             isPresented: Binding(
                 get: { pendingDeleteProject != nil },
                 set: { if !$0 { pendingDeleteProject = nil } }
             ),
-            titleVisibility: .visible
-        ) {
+            presenting: pendingDeleteProject
+        ) { project in
             Button("Delete", role: .destructive) {
-                if let project = pendingDeleteProject {
-                    Task { await deleteProject(project) }
-                }
-                pendingDeleteProject = nil
+                Task { await deleteProject(project) }
             }
-            Button("Cancel", role: .cancel) { pendingDeleteProject = nil }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("Its recordings stay in your Library; personal notes are deleted.")
         }
         .refreshable { await load() }
         .task { await load() }
@@ -262,5 +278,239 @@ struct LibraryContentView: View {
             errorMessage = error.localizedDescription
             await load()
         }
+    }
+}
+
+/// Two-step "New project" flow: name the project, then optionally add existing
+/// recordings to it (skippable).
+private struct NewProjectSheet: View {
+    let standaloneNotes: [Note]
+    let onFinished: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var name = ""
+    @State private var createdProject: Project?
+    @State private var isBusy = false
+    @State private var selected: Set<UUID> = []
+    @State private var errorMessage: String?
+    @State private var searchText = ""
+    @State private var addFilter: AddFilter = .all
+
+    enum AddFilter: String, CaseIterable, Hashable {
+        case all = "All"
+        case selected = "Selected"
+        case unselected = "Unselected"
+    }
+
+    /// Search-filtered recordings.
+    private var searchedNotes: [Note] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return standaloneNotes }
+        return standaloneNotes.filter { $0.title.lowercased().contains(query) }
+    }
+
+    /// Search + selection filter applied.
+    private var displayedNotes: [Note] {
+        switch addFilter {
+        case .all: return searchedNotes
+        case .selected: return searchedNotes.filter { selected.contains($0.id) }
+        case .unselected: return searchedNotes.filter { !selected.contains($0.id) }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let project = createdProject {
+                    addRecordingsStep(project)
+                } else {
+                    nameStep
+                }
+            }
+            .recapBackground()
+            .navigationTitle(createdProject == nil ? "New project" : "Add recordings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if createdProject == nil {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }.tint(AppColors.accent)
+                    }
+                } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Skip") { finish() }.tint(AppColors.accent)
+                    }
+                }
+            }
+            .alert("Error", isPresented: .constant(errorMessage != nil)) {
+                Button("OK") { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    private var nameStep: some View {
+        VStack(alignment: .leading, spacing: Spacing.s4) {
+            Text("PROJECT NAME")
+                .appTextStyle(.label)
+                .foregroundStyle(AppColors.neutral600)
+            AppTextField(title: "e.g. Summit 2026", text: $name)
+            Spacer()
+            Button(isBusy ? "Creating…" : "Create project") {
+                Task { await create() }
+            }
+            .buttonStyle(.appPrimary)
+            .disabled(isBusy || name.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(Spacing.s5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private func addRecordingsStep(_ project: Project) -> some View {
+        VStack(spacing: 0) {
+            if standaloneNotes.isEmpty {
+                Spacer()
+                Text("No recordings to add yet.")
+                    .appTextStyle(.body)
+                    .foregroundStyle(AppColors.neutral500)
+                Spacer()
+            } else {
+                searchBar
+                    .padding(.horizontal, Spacing.s4)
+                    .padding(.top, Spacing.s3)
+                    .padding(.bottom, Spacing.s2)
+                HStack(spacing: Spacing.s2) {
+                    ForEach(AddFilter.allCases, id: \.self) { option in
+                        FilterChip(title: option.rawValue, isActive: addFilter == option) {
+                            addFilter = option
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Spacing.s4)
+                .padding(.bottom, Spacing.s2)
+                List {
+                    Section {
+                        Text("Choose recordings to add to “\(project.name)”. You can skip this.")
+                            .appTextStyle(.small)
+                            .foregroundStyle(AppColors.textSecondary)
+                            .recapCardRow()
+                        ForEach(displayedNotes) { note in
+                            Button { toggle(note.id) } label: {
+                                noteRow(note)
+                            }
+                            .buttonStyle(.plain)
+                            .recapCardRow()
+                        }
+                    }
+                }
+                .listStyle(.plain)
+                .recapBackground()
+            }
+
+            Button(selected.isEmpty
+                   ? "Add to project"
+                   : "Add \(selected.count) recording\(selected.count == 1 ? "" : "s")") {
+                Task { await addSelected() }
+            }
+            .buttonStyle(.appPrimary)
+            .disabled(isBusy || selected.isEmpty)
+            .padding(Spacing.s5)
+        }
+    }
+
+    private func noteRow(_ note: Note) -> some View {
+        let isSelected = selected.contains(note.id)
+        return VStack(alignment: .leading, spacing: Spacing.s2) {
+            HStack {
+                if let category = note.category {
+                    AppChip(text: category.displayText, dotColor: category.dotColor)
+                } else {
+                    AppChip(text: "Note")
+                }
+                Spacer()
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundStyle(isSelected ? AppColors.accent : AppColors.labelWhite.opacity(0.25))
+            }
+            Text(note.title)
+                .appTextStyle(.bodyMedium)
+                .foregroundStyle(AppColors.neutral800)
+        }
+        .padding(Spacing.s3 + 1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(isSelected ? AppColors.accent.opacity(0.12) : AppColors.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .strokeBorder(isSelected ? AppColors.accent.opacity(0.55) : AppColors.separator,
+                              lineWidth: isSelected ? 1.5 : 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15))
+                .foregroundStyle(AppColors.labelWhite.opacity(0.45))
+            TextField("Search recordings", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .foregroundStyle(AppColors.textPrimary)
+                .tint(AppColors.accent)
+            if !searchText.isEmpty {
+                Button { searchText = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(AppColors.labelWhite.opacity(0.35))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, Spacing.s4)
+        .padding(.vertical, 11)
+        .background(AppColors.surface)
+        .overlay(Capsule().strokeBorder(Color.white.opacity(0.07), lineWidth: 1))
+        .clipShape(Capsule())
+    }
+
+    private func toggle(_ id: UUID) {
+        if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
+    }
+
+    private func create() async {
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            createdProject = try await StorageService.createProject(
+                name: name.trimmingCharacters(in: .whitespaces)
+            )
+        } catch {
+            if error.isCancellation { return }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func addSelected() async {
+        guard let project = createdProject else { return }
+        isBusy = true
+        defer { isBusy = false }
+        do {
+            for id in selected {
+                _ = try await StorageService.updateNote(
+                    id, fields: ["project_id": .string(project.id.uuidString)]
+                )
+            }
+            finish()
+        } catch {
+            if error.isCancellation { return }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func finish() {
+        onFinished()
+        dismiss()
     }
 }
