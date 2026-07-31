@@ -36,6 +36,13 @@ jobs:
             exit 1
           fi
 
+          # A trailing newline is easy to include when copying out of a dashboard
+          # and produces exactly the same malformed-URL failure as pasting the
+          # whole URL. Neither a project ref nor a JWT contains whitespace, so
+          # stripping it is always safe.
+          REF="$(printf '%s' "$REF" | tr -d '[:space:]')"
+          KEY="$(printf '%s' "$KEY" | tr -d '[:space:]')"
+
           # Lengths only: enough to spot a wrong paste, impossible to leak a value.
           echo "Project ref: ${#REF} chars, anon key: ${#KEY} chars"
 
