@@ -1,0 +1,37 @@
+name: Keep Supabase awake
+
+# Supabase pauses free projects after 7 days with no activity, which shows users
+# a broken app and needs manual reactivation from the dashboard. Any request
+# resets that clock, so this makes one cheap query every three days.
+#
+# Remove this workflow once the app no longer depends on Supabase.
+
+on:
+  schedule:
+    # 06:00 UTC on every third day of the month. The longest gap this can
+    # produce is four days, comfortably inside the seven-day window.
+    - cron: "0 6 */3 * *"
+  # Lets you run it by hand from the Actions tab to confirm it works.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query the database
+        run: |
+          url="https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/rest/v1/notes?select=id&limit=1"
+          code=$(curl -sS -o /dev/null -w "%{http_code}" "$url" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+
+          echo "HTTP $code"
+
+          # A 200 or a row-level-security 401/403 both mean the database woke up
+          # and answered, which is all this needs. Only a server error or no
+          # response at all means the ping isn't doing its job — fail loudly so
+          # this doesn't rot silently and let the project pause anyway.
+          if [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
+            echo "::error::Supabase did not respond properly (HTTP $code)"
+            exit 1
+          fi
