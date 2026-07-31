@@ -4,6 +4,9 @@ name: Keep Supabase awake
 # a broken app and needs manual reactivation from the dashboard. Any request
 # resets that clock, so this makes one cheap query every three days.
 #
+# Note: this keeps an *awake* project awake. It cannot wake one that has already
+# paused — that needs a manual restore from the Supabase dashboard first.
+#
 # Remove this workflow once the app no longer depends on Supabase.
 
 on:
@@ -19,19 +22,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Query the database
+        env:
+          REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          url="https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/rest/v1/notes?select=id&limit=1"
-          code=$(curl -sS -o /dev/null -w "%{http_code}" "$url" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          # Steps run under `bash -e` by default, which aborts on curl's exit
+          # code before anything is printed — turning a diagnosable problem into
+          # a bare red cross. Handle the failures explicitly instead.
+          set +e
 
-          echo "HTTP $code"
-
-          # A 200 or a row-level-security 401/403 both mean the database woke up
-          # and answered, which is all this needs. Only a server error or no
-          # response at all means the ping isn't doing its job — fail loudly so
-          # this doesn't rot silently and let the project pause anyway.
-          if [ "$code" = "000" ] || [ "$code" -ge 500 ]; then
-            echo "::error::Supabase did not respond properly (HTTP $code)"
+          if [ -z "$REF" ] || [ -z "$KEY" ]; then
+            echo "::error::SUPABASE_PROJECT_REF or SUPABASE_ANON_KEY is empty. They must be *repository* secrets (Settings > Secrets and variables > Actions), not environment secrets — an environment secret only resolves for a job that declares one."
             exit 1
           fi
+
+          # Lengths only: enough to spot a wrong paste, impossible to leak a value.
+          echo "Project ref: ${#REF} chars, anon key: ${#KEY} chars"
+
+          case "$REF" in
+            *.*|*/*|*:*)
+              echo "::error::SUPABASE_PROJECT_REF looks like a URL. It should be just the project ref — the subdomain on its own, e.g. 'abcdefghijklmnop', not 'https://abcdefghijklmnop.supabase.co'."
+              exit 1
+              ;;
+          esac
+
+          url="https://${REF}.supabase.co/rest/v1/notes?select=id&limit=1"
+          code=$(curl -sS -m 30 -o /dev/null -w "%{http_code}" "$url" \
+            -H "apikey: $KEY" \
+            -H "Authorization: Bearer $KEY")
+          curl_status=$?
+
+          echo "curl exit: $curl_status, HTTP: $code"
+
+          if [ "$curl_status" -ne 0 ]; then
+            echo "::error::Could not reach ${REF}.supabase.co (curl exit $curl_status). Either the project ref is wrong, or the project is already paused and needs restoring once from the Supabase dashboard."
+            exit 1
+          fi
+
+          # A row-level-security 401/403 is a perfectly good answer: the database
+          # woke up and replied, which is the entire point. Only a server error
+          # means the ping isn't doing its job.
+          if [ "$code" -ge 500 ]; then
+            echo "::error::Supabase returned HTTP $code. If the project is paused, restore it from the dashboard — this workflow keeps a live project awake but cannot revive a paused one."
+            exit 1
+          fi
+
+          echo "Database answered with HTTP $code — pause timer reset."
