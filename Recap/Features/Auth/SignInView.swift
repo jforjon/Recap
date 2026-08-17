@@ -78,9 +78,9 @@ struct SignInView: View {
     /// The recap mark — three decaying amber bars, matching the app icon.
     private var logoMark: some View {
         VStack(spacing: 5) {
-            Capsule().fill(AppColors.accent).frame(width: 46, height: 7)
-            Capsule().fill(AppColors.accent.opacity(0.58)).frame(width: 32, height: 7)
-            Capsule().fill(AppColors.accent.opacity(0.30)).frame(width: 18, height: 7)
+            Capsule().fill(AppColors.accentGraphic).frame(width: 46, height: 7)
+            Capsule().fill(AppColors.accentGraphic.opacity(0.58)).frame(width: 32, height: 7)
+            Capsule().fill(AppColors.accentGraphic.opacity(0.30)).frame(width: 18, height: 7)
         }
         .frame(width: 46, alignment: .leading)
         .padding(.bottom, Spacing.s1)

@@ -78,7 +78,7 @@ struct MarkdownText: View {
                         .foregroundStyle(AppColors.textPrimary)
                 case .bullet:
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {
-                        Text("•").foregroundStyle(AppColors.accent)
+                        Text("•").foregroundStyle(AppColors.accentGraphic)
                         Text(inline(line.text)).appTextStyle(.body)
                             .foregroundStyle(AppColors.textPrimary)
                             .frame(maxWidth: .infinity, alignment: .leading)

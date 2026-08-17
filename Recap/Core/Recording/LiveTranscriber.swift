@@ -42,8 +42,12 @@ enum SpokenLanguageStore {
 /// On-device, streaming speech-to-text built on the iOS 26 `SpeechAnalyzer` /
 /// `SpeechTranscriber` APIs. Captures the microphone through `AVAudioEngine` and
 /// emits a live transcript with **no network and no third-party API** — so losing
-/// signal never affects transcription. Replaces the old chunked-audio + Whisper
-/// upload pipeline entirely; audio is never written to disk.
+/// signal never affects transcription.
+///
+/// Audio is written to disk only when the user has opted in (see `AudioStore`);
+/// with the setting off, nothing but text ever leaves this class. When it is on,
+/// the same tap feeds both the analyzer and the file, so the timings on each
+/// segment line up with the recording exactly.
 @MainActor
 final class LiveTranscriber {
     struct TranscriberError: LocalizedError {
@@ -68,8 +72,14 @@ final class LiveTranscriber {
     private var converter: AVAudioConverter?
     private var analyzerFormat: AVAudioFormat?
     private var interruptionObserver: NSObjectProtocol?
+    private var audioFile: AVAudioFile?
+    private var audioURL: URL?
 
     private(set) var finalizedText = ""
+    /// Finalized speech with its position in the audio. Empty until the first
+    /// result lands; kept alongside `finalizedText` rather than replacing it so
+    /// nothing downstream has to change to keep working.
+    private(set) var segments: [TranscriptSegment] = []
     private var volatileText = ""
     private var isRunning = false
 
@@ -86,12 +96,17 @@ final class LiveTranscriber {
     /// then starts capturing and transcribing. Throws before any state changes if
     /// permission is denied or the model can't be prepared.
     ///
-    /// - Parameter languageCode: BCP-47 identifier to transcribe in. When nil, the
-    ///   device's current language is used (falling back to en-US).
-    func start(languageCode: String? = nil) async throws {
+    /// - Parameters:
+    ///   - languageCode: BCP-47 identifier to transcribe in. When nil, the
+    ///     device's current language is used (falling back to en-US).
+    ///   - audioURL: where to write the recording. Nil means don't keep audio,
+    ///     which is the default and what the app did exclusively until now.
+    func start(languageCode: String? = nil, audioURL: URL? = nil) async throws {
         guard !isRunning else { return }
         finalizedText = ""
         volatileText = ""
+        segments = []
+        self.audioURL = audioURL
 
         try await requestAuthorization()
 
@@ -108,11 +123,14 @@ final class LiveTranscriber {
             locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "en-US"))
                 ?? Locale(identifier: "en-US")
         }
+        // `.audioTimeRange` is what makes every downstream feature possible —
+        // synced playback, pause-based paragraphs, timestamps. It costs nothing
+        // to request and cannot be recovered for recordings made without it.
         let transcriber = SpeechTranscriber(
             locale: locale,
             transcriptionOptions: [],
             reportingOptions: [.volatileResults],
-            attributeOptions: []
+            attributeOptions: [.audioTimeRange]
         )
         self.transcriber = transcriber
 
@@ -130,7 +148,7 @@ final class LiveTranscriber {
             do {
                 for try await result in transcriber.results {
                     let piece = String(result.text.characters)
-                    self.ingest(piece, isFinal: result.isFinal)
+                    self.ingest(piece, isFinal: result.isFinal, range: result.range)
                 }
             } catch {
                 // Stream ended or the recognizer failed; whatever was finalized is kept.
@@ -152,6 +170,9 @@ final class LiveTranscriber {
 
         engine.inputNode.removeTap(onBus: 0)
         engine.stop()
+        // Releasing the file closes it and writes the AAC trailer; until that
+        // happens the .m4a on disk is unplayable.
+        audioFile = nil
         inputBuilder?.finish()
         inputBuilder = nil
 
@@ -175,15 +196,29 @@ final class LiveTranscriber {
         _ = await finish()
         finalizedText = ""
         volatileText = ""
+        segments = []
+        // A discarded recording should leave no audio behind.
+        if let audioURL {
+            try? FileManager.default.removeItem(at: audioURL)
+        }
+        audioURL = nil
     }
 
     // MARK: - Results
 
-    private func ingest(_ piece: String, isFinal: Bool) {
+    private func ingest(_ piece: String, isFinal: Bool, range: CMTimeRange) {
         if isFinal {
             let clean = piece.trimmingCharacters(in: .whitespacesAndNewlines)
             if !clean.isEmpty {
                 finalizedText += finalizedText.isEmpty ? clean : " " + clean
+
+                let start = CMTimeGetSeconds(range.start)
+                let end = CMTimeGetSeconds(range.end)
+                // Guard against a non-numeric CMTime (an indefinite range) turning
+                // into a NaN that would poison every later seek and comparison.
+                if start.isFinite, end.isFinite, end >= start {
+                    segments.append(TranscriptSegment(start: start, end: end, text: clean))
+                }
             }
             volatileText = ""
         } else {
@@ -251,14 +286,36 @@ final class LiveTranscriber {
             converter = AVAudioConverter(from: inputFormat, to: analyzerFormat)
         }
 
+        // AAC at 32 kbps is transparent enough for speech and lands around 15 MB
+        // an hour — a semester of lectures rather than a full iCloud account. The
+        // sample rate and channel count mirror the tap so the file's processing
+        // format matches the buffers exactly and no second conversion is needed.
+        if let audioURL {
+            let settings: [String: Any] = [
+                AVFormatIDKey: kAudioFormatMPEG4AAC,
+                AVSampleRateKey: inputFormat.sampleRate,
+                AVNumberOfChannelsKey: inputFormat.channelCount,
+                AVEncoderBitRateKey: 32_000,
+            ]
+            // A failure here must not stop the recording: the transcript is the
+            // thing that matters, audio is the bonus.
+            audioFile = try? AVAudioFile(forWriting: audioURL, settings: settings)
+            if audioFile == nil { self.audioURL = nil }
+        }
+
         // Capture locals so the realtime audio thread never touches main-actor state.
         let converter = self.converter
         let analyzerFormat = self.analyzerFormat
+        let audioFile = self.audioFile
         guard let builder = inputBuilder else { return }
 
         input.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
             let outBuffer = Self.convert(buffer, using: converter, to: analyzerFormat) ?? buffer
             builder.yield(AnalyzerInput(buffer: outBuffer))
+
+            // Written from the same buffer the analyzer sees, so segment timings
+            // and the file's timeline are the same clock.
+            try? audioFile?.write(from: buffer)
 
             let level = Self.rmsLevel(buffer)
             Task { @MainActor in self?.onAudioLevel?(level) }

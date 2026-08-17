@@ -1,5 +1,9 @@
 import Foundation
 
+/// Turns a recording's transcript into a title, a summary and a category.
+///
+/// Runs against Anthropic directly from the device — there is no `/api/summarise`
+/// route and no server any more.
 enum SummaryClient {
     struct SummaryError: LocalizedError {
         let message: String
@@ -10,37 +14,82 @@ enum SummaryClient {
         let title: String
         let summary: String
         let category: NoteCategory?
+        /// Who was speaking, when the transcript says. Kept out of the summary
+        /// body and stored in its own column, the way the web app split it.
+        let speakerContext: String?
     }
 
-    /// Calls /api/summarise — mirrors app/lib/claude.ts's generateSummary().
-    static func generateSummary(transcript: String, accessToken: String) async throws -> Result {
-        var request = URLRequest(url: AppConfig.apiBaseURL.appendingPathComponent("api/summarise"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(["transcript": transcript])
+    private static let system = """
+    You summarise transcripts of talks, panels, trainings and meetings that \
+    someone recorded to refer back to later.
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+    The transcript comes from live speech-to-text. Expect no speaker labels, \
+    occasional misheard words, and filler. Work with what is there; never \
+    invent detail that isn't in the transcript, and don't note that the \
+    transcript is imperfect.
 
-        struct ResponseBody: Decodable {
+    Reply with a single JSON object and nothing else — no Markdown fence, no \
+    commentary. Keys:
+
+    - "title": a specific, plain title, 8 words or fewer. Name the actual \
+      subject rather than the format. Not "Panel discussion" but "Pricing \
+      pressure in enterprise SaaS".
+    - "summary": Markdown. Lead with a short paragraph on what this was about, \
+      then "## Key points" as a bullet list of the substance — the arguments, \
+      numbers, examples and disagreements, not a table of contents. Where the \
+      transcript makes clear who said what, attribute it. If, and only if, the \
+      transcript contains things the listener said they would do or should \
+      follow up on, add a final "## Action items" section as a bullet list. \
+      Omit that section entirely when there are none — do not invent tasks.
+    - "category": exactly one of "talk", "training", "panel", or null when none \
+      of them fits.
+    - "speaker": who gave the talk or led the session — their name, role and \
+      organisation, the background they gave for themselves, and the event or \
+      setting — plus their apparent angle or expertise where the transcript \
+      shows it. Two or three sentences of plain prose, no headings or bullets. \
+      Names are often misheard by speech-to-text: use the transcript's own \
+      spelling rather than guessing at a different one. Null when nobody is \
+      identifiable. Keep this out of the summary — it has its own place in the \
+      app — but do attribute points to people inside the summary as usual.
+    """
+
+    static func generateSummary(transcript: String) async throws -> Result {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw SummaryError(message: "There's no transcript to summarise yet.")
+        }
+
+        let text = try await AnthropicClient.complete(
+            system: system,
+            user: "Transcript:\n\n\(trimmed)"
+        )
+
+        struct Payload: Decodable {
             let title: String?
             let summary: String?
             let category: String?
-            let error: String?
+            let speaker: String?
         }
-        let decoded = try JSONDecoder().decode(ResponseBody.self, from: data)
+        guard
+            let data = AnthropicClient.unwrapJSON(text).data(using: .utf8),
+            let payload = try? JSONDecoder().decode(Payload.self, from: data),
+            let title = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+            let summary = payload.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+            !title.isEmpty, !summary.isEmpty
+        else {
+            throw SummaryError(message: "The summary came back in an unexpected format. Try again.")
+        }
 
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw SummaryError(message: decoded.error ?? "Summary generation failed")
-        }
-        guard let title = decoded.title, let summary = decoded.summary else {
-            throw SummaryError(message: "Summary response did not include title and summary")
-        }
+        let speaker = payload.speaker?.trimmingCharacters(in: .whitespacesAndNewlines)
 
         return Result(
             title: title,
             summary: summary,
-            category: decoded.category.flatMap(NoteCategory.init(rawValue:))
+            category: payload.category.flatMap(NoteCategory.init(rawValue:)),
+            // "null" as a string turns up often enough to be worth guarding.
+            speakerContext: (speaker?.isEmpty == false && speaker?.lowercased() != "null")
+                ? speaker
+                : nil
         )
     }
 }

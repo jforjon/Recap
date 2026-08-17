@@ -46,7 +46,22 @@ final class AuthManager {
     }
 
     func signOut() async throws {
+        // Drop the BYOK key first: it is filed under the user id, which stops
+        // resolving the moment the session ends, and a signed-out device should
+        // not still be holding someone's spendable credential.
+        try? await AnthropicKeyStore.clear()
         try await SupabaseService.client.auth.signOut()
+    }
+
+    /// Updates the signed-in user's password.
+    func updatePassword(_ newPassword: String) async throws {
+        try await SupabaseService.client.auth.update(user: UserAttributes(password: newPassword))
+    }
+
+    /// Requests an email change. Supabase sends a confirmation link; the address
+    /// only changes once the user confirms it, so `state` won't update immediately.
+    func updateEmail(_ newEmail: String) async throws {
+        try await SupabaseService.client.auth.update(user: UserAttributes(email: newEmail))
     }
 
     /// The current session's access token, needed for calling our authenticated API routes.

@@ -4,6 +4,8 @@ import Supabase
 struct LibraryContentView: View {
     let nav: AppNavigationModel
     let authManager: AuthManager
+    let importManager: AudioImportManager
+    let recordingManager: RecordingManager
 
     enum Filter: String, CaseIterable, Hashable {
         case all = "All"
@@ -13,30 +15,29 @@ struct LibraryContentView: View {
 
     @State private var notes: [Note] = []
     @State private var projects: [ProjectWithNoteCount] = []
+    /// Personal notes for the whole account, grouped by what they hang off, so
+    /// search can reach the user's own words as well as the transcripts.
+    @State private var notesByRecording: [UUID: [PersonalNote]] = [:]
+    @State private var notesByProject: [UUID: [PersonalNote]] = [:]
     @State private var searchText = ""
     @State private var filter: Filter = .all
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showSettings = false
     @State private var showNewProject = false
+    @State private var showImportPicker = false
     @State private var pendingDeleteProject: ProjectWithNoteCount?
 
     var body: some View {
-        @Bindable var nav = nav
-        List(selection: $nav.detailSelection) {
+        List {
             Section {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Library")
-                            .font(.system(size: 32, weight: .bold))
-                            .tracking(-0.8)
-                            .foregroundStyle(AppColors.textPrimary)
-                        Spacer()
-                        Text("\(notes.count) NOTES")
-                            .appTextStyle(.mono)
-                            .foregroundStyle(AppColors.textFaint)
-                    }
-                    .padding(.top, Spacing.s2)
+                    Text("Library")
+                        .font(.system(size: 32, weight: .bold))
+                        .tracking(-0.8)
+                        .foregroundStyle(AppColors.textPrimary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, Spacing.s2)
 
                     searchBar
                     HStack(spacing: Spacing.s2) {
@@ -50,23 +51,47 @@ struct LibraryContentView: View {
                 }
                 .recapCardRow()
 
-                if isEmptyState {
+                // Above everything: a recording just sent, or an import in
+                // flight, is the most recent thing the user did and the thing
+                // they'll be watching for.
+                if showsRecordings {
+                    ForEach(pendingUploads) { upload in
+                        PendingRecordingRow(upload: upload)
+                            .recapCardRow()
+                    }
+                }
+
+                ForEach(importManager.inFlight) { progress in
+                    ImportProgressRow(progress: progress) {
+                        importManager.dismiss(progress.id)
+                    }
+                    .recapCardRow()
+                }
+
+                if isEmptyState && importManager.inFlight.isEmpty && pendingUploads.isEmpty {
                     emptyState.recapCardRow()
                 }
 
                 // Projects
                 if showsProjects {
-                    ForEach(filteredProjects) { item in
-                        Button {
-                            nav.sidebarSelection = .project(item.id)
-                        } label: {
-                            ProjectCard(
-                                name: item.project.name,
-                                recordingCount: item.noteCount,
-                                noteCount: item.personalNoteCount
-                            )
+                    ForEach(projectHits) { hit in
+                        let item = hit.project
+                        // The snippet sits outside the Button so the projectCard
+                        // press treatment stays on the card itself.
+                        VStack(alignment: .leading, spacing: Spacing.s2) {
+                            Button {
+                                nav.sidebarSelection = .project(item.id)
+                            } label: {
+                                ProjectCard(
+                                    name: item.project.name,
+                                    recordingCount: item.noteCount,
+                                    noteCount: item.personalNoteCount
+                                )
+                            }
+                            .buttonStyle(.projectCard)
+
+                            matchContext(field: hit.field, snippet: hit.snippet)
                         }
-                        .buttonStyle(.projectCard)
                         .recapCardRow()
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
@@ -81,18 +106,23 @@ struct LibraryContentView: View {
 
                 // Recordings
                 if showsRecordings {
-                    ForEach(filteredNotes) { note in
-                        noteRow(note)
-                            .tag(AppNavigationModel.DetailSelection.note(note.id))
-                            .recapCardRow()
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    Task { await deleteNote(note.id) }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
-                                .tint(AppColors.destructive)
+                    ForEach(noteHits) { hit in
+                        let note = hit.note
+                        Button {
+                            nav.detailSelection = .note(note.id)
+                        } label: {
+                            noteRow(note, hit: hit)
+                        }
+                        .buttonStyle(.plain)
+                        .recapCardRow()
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                Task { await deleteNote(note.id) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
+                            .tint(AppColors.destructive)
+                        }
                     }
                 }
             }
@@ -104,10 +134,15 @@ struct LibraryContentView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showNewProject = true
+                Menu {
+                    AppMenuButton(title: "New project", systemImage: "folder.badge.plus") {
+                        showNewProject = true
+                    }
+                    AppMenuButton(title: "Import audio file", systemImage: "square.and.arrow.down") {
+                        showImportPicker = true
+                    }
                 } label: {
-                    Image(systemName: "folder.badge.plus")
+                    Image(systemName: "plus")
                 }
                 .tint(AppColors.textBright)
             }
@@ -123,6 +158,7 @@ struct LibraryContentView: View {
         .navigationDestination(isPresented: $showSettings) {
             SettingsView(authManager: authManager)
         }
+        .audioImporter(isPresented: $showImportPicker, importManager: importManager)
         .sheet(isPresented: $showNewProject) {
             NewProjectSheet(standaloneNotes: notes) {
                 nav.projectsVersion += 1
@@ -146,6 +182,21 @@ struct LibraryContentView: View {
         .refreshable { await load() }
         .task { await load() }
         .onChange(of: nav.projectsVersion) { Task { await load() } }
+        // A finished import has written a new note straight to the database.
+        .onChange(of: importManager.completedVersion) { Task { await load() } }
+        // A recording has landed (or been renamed by the enricher afterwards).
+        // The note is inserted here rather than waiting for the reload, so the
+        // row doesn't blink out as the "Saving…" one is removed.
+        .onChange(of: recordingManager.savedVersion) {
+            if let saved = recordingManager.lastSaved, saved.projectId == nil {
+                if let index = notes.firstIndex(where: { $0.id == saved.id }) {
+                    notes[index] = saved
+                } else {
+                    notes.insert(saved, at: 0)
+                }
+            }
+            Task { await load() }
+        }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -160,11 +211,11 @@ struct LibraryContentView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15))
                 .foregroundStyle(AppColors.labelWhite.opacity(0.45))
-            TextField("Search", text: $searchText)
+            TextField("Search transcripts, summaries, notes", text: $searchText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .foregroundStyle(AppColors.textPrimary)
-                .tint(AppColors.accent)
+                .tint(AppColors.accentGraphic)
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill")
@@ -180,24 +231,24 @@ struct LibraryContentView: View {
         .clipShape(Capsule())
     }
 
+    @ViewBuilder
     private var emptyState: some View {
-        VStack(spacing: 6) {
-            Text(searchText.isEmpty ? "Nothing here yet" : "No matches")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(AppColors.textPrimary)
-            Text(searchText.isEmpty ? "Start a recording below." : "Try a different search.")
-                .appTextStyle(.small)
-                .foregroundStyle(AppColors.textTertiary)
+        if searchText.isEmpty {
+            EmptyStateView(
+                icon: "waveform",
+                title: "Nothing here yet",
+                message: "Make your first recording with the button below, or create a project to organize them."
+            )
+        } else {
+            EmptyStateView(
+                icon: "magnifyingglass",
+                title: "No matches",
+                message: "Nothing matches “\(searchText)” in any title, transcript, summary or note. Try fewer words."
+            )
         }
-        .frame(maxWidth: .infinity)
-        .padding(Spacing.s6)
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4]))
-        )
     }
 
-    private func noteRow(_ note: Note) -> some View {
+    private func noteRow(_ note: Note, hit: LibrarySearch.NoteHit) -> some View {
         AppCard {
             HStack {
                 if let category = note.category {
@@ -213,6 +264,28 @@ struct LibraryContentView: View {
             Text(note.title)
                 .appTextStyle(.bodyMedium)
                 .foregroundStyle(AppColors.neutral800)
+
+            matchContext(field: hit.field, snippet: hit.snippet)
+        }
+    }
+
+    /// Why a row is in the results: which part matched, and the words around it.
+    /// Without this, a transcript hit looks like an unrelated recording.
+    @ViewBuilder
+    private func matchContext(field: LibrarySearch.Field, snippet: AttributedString?) -> some View {
+        if let snippet {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(field.label)
+                    .appTextStyle(.label)
+                    .foregroundStyle(AppColors.neutral500)
+                Text(snippet)
+                    .appTextStyle(.small)
+                    .foregroundStyle(AppColors.textSecondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 2)
         }
     }
 
@@ -222,23 +295,40 @@ struct LibraryContentView: View {
     private var showsRecordings: Bool { filter == .all || filter == .recordings }
 
     private var query: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var filteredNotes: [Note] {
+    private var noteHits: [LibrarySearch.NoteHit] {
         guard showsRecordings else { return [] }
-        guard !query.isEmpty else { return notes }
-        return notes.filter { $0.title.lowercased().contains(query) }
+        return LibrarySearch.notes(
+            matching: query,
+            in: notes,
+            personalNotesByRecording: notesByRecording
+        )
     }
 
-    private var filteredProjects: [ProjectWithNoteCount] {
+    private var projectHits: [LibrarySearch.ProjectHit] {
         guard showsProjects else { return [] }
-        guard !query.isEmpty else { return projects }
-        return projects.filter { $0.project.name.lowercased().contains(query) }
+        return LibrarySearch.projects(
+            matching: query,
+            in: projects,
+            personalNotesByProject: notesByProject
+        )
     }
 
     private var isEmptyState: Bool {
-        !isLoading && filteredNotes.isEmpty && filteredProjects.isEmpty
+        !isLoading && noteHits.isEmpty && projectHits.isEmpty
+    }
+
+    /// Recordings still on their way to the server. Standalone ones only — the
+    /// Library lists standalone recordings, and a project's own are shown on the
+    /// project screen. They're hidden while searching, since a row with only a
+    /// placeholder date title can't match anything the user typed.
+    private var pendingUploads: [RecordingManager.PendingUpload] {
+        guard query.isEmpty else { return [] }
+        return recordingManager.pendingUploads
+            .filter { $0.projectId == nil }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     // MARK: - Data
@@ -248,8 +338,15 @@ struct LibraryContentView: View {
         do {
             async let notesResult = StorageService.getStandaloneNotes()
             async let projectsResult = StorageService.getProjectsWithNoteCounts()
+            async let personalResult = StorageService.getAllPersonalNotes()
             notes = try await notesResult
             projects = try await projectsResult
+
+            // Grouped once here rather than per keystroke — search re-runs on
+            // every character typed.
+            let personal = try await personalResult
+            notesByRecording = Dictionary(grouping: personal.filter { $0.noteId != nil }) { $0.noteId! }
+            notesByProject = Dictionary(grouping: personal.filter { $0.projectId != nil }) { $0.projectId! }
         } catch {
             if error.isCancellation { return }
             errorMessage = error.localizedDescription
@@ -334,11 +431,11 @@ private struct NewProjectSheet: View {
             .toolbar {
                 if createdProject == nil {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }.tint(AppColors.accent)
+                        Button("Cancel") { dismiss() }.tint(AppColors.accentGraphic)
                     }
                 } else {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Skip") { finish() }.tint(AppColors.accent)
+                        Button("Skip") { finish() }.tint(AppColors.accentGraphic)
                     }
                 }
             }
@@ -372,9 +469,11 @@ private struct NewProjectSheet: View {
         VStack(spacing: 0) {
             if standaloneNotes.isEmpty {
                 Spacer()
-                Text("No recordings to add yet.")
-                    .appTextStyle(.body)
-                    .foregroundStyle(AppColors.neutral500)
+                EmptyStateView(
+                    icon: "waveform",
+                    title: "No recordings yet",
+                    message: "Once you’ve made some recordings, you can add them to this project."
+                )
                 Spacer()
             } else {
                 searchBar
@@ -433,7 +532,7 @@ private struct NewProjectSheet: View {
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
-                    .foregroundStyle(isSelected ? AppColors.accent : AppColors.labelWhite.opacity(0.25))
+                    .foregroundStyle(isSelected ? AppColors.accentGraphic : AppColors.labelWhite.opacity(0.25))
             }
             Text(note.title)
                 .appTextStyle(.bodyMedium)
@@ -441,10 +540,10 @@ private struct NewProjectSheet: View {
         }
         .padding(Spacing.s3 + 1)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isSelected ? AppColors.accent.opacity(0.12) : AppColors.surface)
+        .background(isSelected ? AppColors.accentTint : AppColors.surface)
         .overlay(
             RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                .strokeBorder(isSelected ? AppColors.accent.opacity(0.55) : AppColors.separator,
+                .strokeBorder(isSelected ? AppColors.accentGraphic.opacity(0.55) : AppColors.separator,
                               lineWidth: isSelected ? 1.5 : 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
@@ -459,7 +558,7 @@ private struct NewProjectSheet: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .foregroundStyle(AppColors.textPrimary)
-                .tint(AppColors.accent)
+                .tint(AppColors.accentGraphic)
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill")

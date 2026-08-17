@@ -14,27 +14,52 @@ extension Color {
 }
 
 /// Design tokens for the "recap — iOS dark UI" system: soft-charcoal surfaces, a
-/// warm amber accent, and Apple's slightly-cool label white for text. Dark-mode
+/// sapphire accent, and Apple's slightly-cool label white for text. Dark-mode
 /// only (the app pins `.preferredColorScheme(.dark)`), so tokens are single
 /// values rather than light/dark pairs.
 enum AppColors {
     /// Apple's label white (rgba 235,235,245) — text opacities are taken from this.
     private static let label = Color(red: 235 / 255, green: 235 / 255, blue: 245 / 255)
 
-    // MARK: - Brand / accent
-    static let accent       = Color(hex: "F0A24A")   // warm amber
-    static let accentText   = Color(hex: "2A1503")   // text/icon on the accent fill
-    static let accentSoft    = Color(hex: "F0A24A").opacity(0.14)
-    static let accentBorder  = Color(hex: "F0A24A").opacity(0.40)
+    // MARK: - Blue ramp (palette)
+    //
+    // One hue (~267°) on an even lightness ladder, with chroma peaking at 600.
+    // The four blues the app actually ships anchor 0/300/600/900; the rest are
+    // interpolated between them in OKLCH. This tier carries no meaning — it is
+    // named by position so it can be repositioned without renaming. Screens
+    // should use the semantic accents below, not these.
+    static let blue0   = Color(hex: "EAF0FF")
+    static let blue100 = Color(hex: "C6D6FD")
+    static let blue200 = Color(hex: "A2BBFA")
+    static let blue300 = Color(hex: "7FA0F5")
+    static let blue400 = Color(hex: "638AEC")
+    static let blue500 = Color(hex: "4773E2")
+    static let blue600 = Color(hex: "2A5BD7")
+    static let blue700 = Color(hex: "2E4A9E")
+    static let blue800 = Color(hex: "2B3968")
+    static let blue900 = Color(hex: "242835")
 
-    // MARK: - Surfaces (charcoal ramp)
-    static let backgroundDeep  = Color(hex: "0F1012") // canvas behind everything
-    static let background      = Color(hex: "17181B") // screen background
-    static let contentColumn   = Color(hex: "1B1C20") // iPad content pane
-    static let bar             = Color(hex: "1D1E22") // sidebar & bottom bars
+    // MARK: - Brand / accent (sapphire)
+    //
+    // The accent has two roles and they are not interchangeable. `accent` is a
+    // *fill* only, and only ever behind `accentText`; against the charcoal
+    // background it doesn't carry enough contrast to be read as text or as an
+    // icon. Anywhere the accent is the foreground — labels, glyphs, tints,
+    // carets, the waveform — use `accentGraphic`.
+    static let accent        = blue600  // fill: primary buttons, selected chip
+    static let accentText    = blue0    // label/icon sitting on that fill
+    static let accentGraphic = blue300  // accent as foreground on dark
+
+    /// The soft accent wash behind selected rows and icon badges. Opaque rather
+    /// than an alpha overlay: it is `blue300` at 12% pre-flattened over
+    /// `background`, which is what both call sites sit on.
+    static let accentTint = blue900
+
+    // MARK: - Surfaces (charcoal ramp — 4 tones)
+    static let backgroundDeep  = Color(hex: "0F1012") // canvas behind everything (iPad / edges)
+    static let background      = Color(hex: "17181B") // screen background, bars & side panes
     static let surface         = Color(hex: "212328") // cards & inputs
-    static let composerField   = Color(hex: "282B31") // note composer input
-    static let surfaceElevated = Color(hex: "32353B") // menus / dialogs (glass base)
+    static let surfaceElevated = Color(hex: "32353B") // menus / dialogs; also pressed rows
 
     // MARK: - Hairlines (pure white, low alpha)
     static let separator       = Color.white.opacity(0.06)
@@ -47,9 +72,10 @@ enum AppColors {
     static let textTertiary  = label.opacity(0.45)
     static let textFaint     = label.opacity(0.35)
 
-    // MARK: - Destructive
-    static let destructive     = Color(hex: "FF453A") // fills / dots
-    static let destructiveText = Color(hex: "FF6961") // text / icons
+    // MARK: - Destructive (3 reds)
+    static let destructiveText = Color(hex: "FF6961") // light — text / icons
+    static let destructive     = Color(hex: "FF453A") // base — fills / dots / tints
+    static let destructiveDeep = Color(hex: "6F2F2E") // dark — borders / tint bg (opaque)
 
     // MARK: - Category accents
     static let categoryTalk     = Color(hex: "E9B44C") // gold
@@ -69,7 +95,9 @@ enum AppColors {
 
     // MARK: - Status (kept for existing call sites)
     static let success500 = Color(hex: "5FE3BE")
-    static let warning500 = accent
+    /// The app's former brand amber, now purely semantic — a warning must not
+    /// read as the accent, and with the accent gone blue it no longer can.
+    static let warning500 = Color(hex: "F0A24A")
     static let error500   = destructive
 
     /// Apple's label white, exposed for opacity-derived text/icon tints.
@@ -96,8 +124,10 @@ enum AppColors {
 /// applied at the call site.
 extension Color {
     static let recapSurface        = AppColors.surface        // #212328
-    static let recapSurfacePressed = AppColors.composerField  // #282B31
-    static let recapAccent         = AppColors.accent         // #F0A24A
+    static let recapSurfacePressed = AppColors.surfaceElevated // #32353B (pressed row highlight)
+    /// The *foreground* accent — every `recapAccent` call site is a glyph, a label
+    /// or a tint, never a fill behind text.
+    static let recapAccent         = AppColors.accentGraphic  // #7FA0F5
     static let recapTextPrimary    = AppColors.textPrimary    // #F5F5F7
     static let recapLabel          = AppColors.labelWhite     // #EBEBF5 (use with .opacity)
 }

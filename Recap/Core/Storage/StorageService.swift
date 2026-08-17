@@ -5,7 +5,7 @@ import Supabase
 enum StorageService {
     private static var db: SupabaseClient { SupabaseService.client }
 
-    private static func currentUserId() async throws -> UUID {
+    static func currentUserId() async throws -> UUID {
         guard let session = try? await db.auth.session else {
             throw StorageError.notAuthenticated()
         }
@@ -106,6 +106,8 @@ enum StorageService {
             .delete()
             .eq("id", value: id)
             .execute()
+        // Centralised here so no delete path anywhere can orphan an audio file.
+        AudioStore.delete(id)
     }
 
     // MARK: - Projects
@@ -228,76 +230,74 @@ enum StorageService {
     }
 
     // MARK: - User settings
-
-    static func getUserSettings() async throws -> UserSettings {
-        let userId = try await currentUserId()
-        let rows: [UserSettings] = try await db.from("user_settings")
-            .select("anthropic_api_key")
-            .eq("user_id", value: userId)
-            .execute()
-            .value
-
-        return rows.first ?? .empty
-    }
-
-    static func saveUserSettings(_ settings: UserSettings) async throws {
-        let userId = try await currentUserId()
-
-        struct Payload: Encodable {
-            let userId: UUID
-            let anthropicApiKey: String?
-            let updatedAt: String
-            enum CodingKeys: String, CodingKey {
-                case userId = "user_id"
-                case anthropicApiKey = "anthropic_api_key"
-                case updatedAt = "updated_at"
-            }
-        }
-
-        let payload = Payload(
-            userId: userId,
-            anthropicApiKey: settings.anthropicApiKey,
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
-
-        try await db.from("user_settings")
-            .upsert(payload)
-            .execute()
-    }
+    //
+    // Intentionally absent: the Anthropic API key used to be read and written
+    // here as a plain-text `user_settings.anthropic_api_key` column. It now
+    // lives in the device Keychain — see `AnthropicKeyStore`. This diverges from
+    // app/lib/storage.ts on purpose; the web app should drop the column too.
 
     // MARK: - Personal notes
 
-    static func getPersonalNotes(_ projectId: UUID) async throws -> [PersonalNote] {
-        try await db.from("personal_notes")
+    static func getPersonalNotes(_ owner: PersonalNoteOwner) async throws -> [PersonalNote] {
+        let base = db.from("personal_notes").select()
+        let filtered = switch owner {
+        case let .project(id): base.eq("project_id", value: id)
+        case let .recording(id): base.eq("note_id", value: id)
+        }
+        return try await filtered
+            .order("created_at", ascending: true)
+            .execute()
+            .value
+    }
+
+    /// Every personal note the user has written, across all projects and
+    /// recordings. One query instead of per-owner fetches, because both callers
+    /// need the whole set at once: Library search matches against them, and a
+    /// project export folds each recording's notes in beside its transcript.
+    static func getAllPersonalNotes() async throws -> [PersonalNote] {
+        let userId = try await currentUserId()
+        return try await db.from("personal_notes")
             .select()
-            .eq("project_id", value: projectId)
+            .eq("user_id", value: userId)
             .order("created_at", ascending: true)
             .execute()
             .value
     }
 
     static func createPersonalNote(
-        projectId: UUID,
+        owner: PersonalNoteOwner,
         content: String,
         type: PersonalNoteType = .text
     ) async throws -> PersonalNote {
         let userId = try await currentUserId()
 
+        // Optionals synthesize to `encodeIfPresent`, so the unused column is
+        // omitted from the insert and keeps its NULL default.
         struct Payload: Encodable {
-            let projectId: UUID
+            let projectId: UUID?
+            let noteId: UUID?
             let userId: UUID
             let content: String
             let type: PersonalNoteType
             enum CodingKeys: String, CodingKey {
                 case projectId = "project_id"
+                case noteId = "note_id"
                 case userId = "user_id"
                 case content
                 case type
             }
         }
 
+        let payload = Payload(
+            projectId: owner.projectId,
+            noteId: owner.noteId,
+            userId: userId,
+            content: content,
+            type: type
+        )
+
         return try await db.from("personal_notes")
-            .insert(Payload(projectId: projectId, userId: userId, content: content, type: type))
+            .insert(payload)
             .select()
             .single()
             .execute()
@@ -318,10 +318,12 @@ enum StorageService {
             .execute()
     }
 
-    static func deleteAllPersonalNotes(projectId: UUID) async throws {
-        try await db.from("personal_notes")
-            .delete()
-            .eq("project_id", value: projectId)
-            .execute()
+    static func deleteAllPersonalNotes(owner: PersonalNoteOwner) async throws {
+        let base = db.from("personal_notes").delete()
+        let filtered = switch owner {
+        case let .project(id): base.eq("project_id", value: id)
+        case let .recording(id): base.eq("note_id", value: id)
+        }
+        try await filtered.execute()
     }
 }

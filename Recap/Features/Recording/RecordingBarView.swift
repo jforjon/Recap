@@ -1,7 +1,14 @@
 import SwiftUI
 
+/// The "Start recording" bar pinned under the Library and project screens.
+///
+/// Only the idle state lives here: once capture begins, `RecordingSessionView`
+/// takes over the whole screen, and this collapses to nothing behind it.
 struct RecordingBarView: View {
     let recordingManager: RecordingManager
+    /// When set, recordings started from this bar are filed under the project;
+    /// `nil` (the Library bar) starts a standalone recording.
+    var projectId: UUID? = nil
 
     @State private var isStarting = false
     @State private var errorMessage: String?
@@ -9,8 +16,7 @@ struct RecordingBarView: View {
 
     var body: some View {
         Group {
-            switch recordingManager.phase {
-            case .idle:
+            if recordingManager.phase == .idle {
                 let languages = SpokenLanguageStore.selected
                 HStack(spacing: Spacing.s3) {
                     if !languages.isEmpty {
@@ -23,50 +29,6 @@ struct RecordingBarView: View {
                     .buttonStyle(.appPrimary)
                     .disabled(isStarting)
                 }
-
-            case .recording:
-                VStack(alignment: .leading, spacing: Spacing.s3) {
-                    if !recordingManager.liveTranscript.isEmpty {
-                        Text(recordingManager.liveTranscript)
-                            .appTextStyle(.body)
-                            .foregroundStyle(AppColors.neutral800)
-                            .lineLimit(3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    HStack(spacing: Spacing.s3) {
-                        Button {
-                            recordingManager.discardRecording()
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.appIcon)
-
-                        RecordingWaveformView(levels: recordingManager.audioLevels)
-
-                        Text(formattedElapsed)
-                            .appTextStyle(.mono)
-                            .foregroundStyle(AppColors.neutral600)
-                            .frame(minWidth: 36, alignment: .trailing)
-
-                        Button {
-                            recordingManager.stopRecording()
-                        } label: {
-                            Image(systemName: "arrow.up")
-                                .fontWeight(.semibold)
-                        }
-                        .frame(width: 44, height: 44)
-                        .background(AppColors.accent)
-                        .foregroundStyle(AppColors.accentText)
-                        .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal, Spacing.s4)
-                .padding(.vertical, Spacing.s4)
-                .background(
-                    Color.clear.background(.ultraThinMaterial)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
             }
         }
         .padding(.horizontal, Spacing.s4)
@@ -75,12 +37,6 @@ struct RecordingBarView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-    }
-
-    private var formattedElapsed: String {
-        let m = recordingManager.elapsed / 60
-        let s = recordingManager.elapsed % 60
-        return String(format: "%02d:%02d", m, s)
     }
 
     // MARK: - Language selection
@@ -99,18 +55,22 @@ struct RecordingBarView: View {
                         Text(displayName(code))
                     }
                 }
+                .tint(AppColors.textPrimary)
             }
         } label: {
-            HStack(spacing: 4) {
+            // Geometry mirrors the pill button styles (44pt frame + s2 vertical
+            // padding = 60pt) so the selector lines up with "Start recording".
+            HStack(spacing: Spacing.s1 + 2) {
                 Image(systemName: "globe")
+                    .font(.system(size: 15))
                 Text(shortName(current))
             }
-            .appTextStyle(.mono)
-            .foregroundStyle(AppColors.neutral700)
-            .padding(.horizontal, Spacing.s3)
+            .appTextStyle(.bodyMedium)
+            .foregroundStyle(AppColors.textPrimary)
             .frame(height: 44)
-            .background(AppColors.neutral200)
-            .clipShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .padding(.vertical, Spacing.s2)
+            .padding(.horizontal, Spacing.s4)
+            .background(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
         }
     }
 
@@ -133,7 +93,7 @@ struct RecordingBarView: View {
         isStarting = true
         defer { isStarting = false }
         do {
-            try await recordingManager.startRecording(language: language)
+            try await recordingManager.startRecording(projectId: projectId, language: language)
         } catch {
             if error.isCancellation { return }
             errorMessage = error.localizedDescription

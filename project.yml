@@ -31,13 +31,41 @@ targets:
           - RobotoMono-Medium.ttf
         SUPABASE_PROJECT_REF: $(SUPABASE_PROJECT_REF)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
-        API_HOST: $(API_HOST)
+    # iCloud storage for saved audio. DISABLED until enrolment in the Apple
+    # Developer Program completes — a free personal team cannot sign iCloud
+    # entitlements, and leaving this in place breaks device builds outright.
+    #
+    # To turn it back on: uncomment, register the container
+    # `iCloud.com.jonchambers.recap` in the developer portal, enable iCloud on
+    # the App ID, then re-run `xcodegen generate`.
+    #
+    # Nothing else needs changing — AudioStore already falls back to on-device
+    # storage when no container is available, and the Settings row says so.
+    #
+    # entitlements:
+    #   path: Recap/Resources/Recap.entitlements
+    #   properties:
+    #     com.apple.developer.icloud-container-identifiers:
+    #       - iCloud.com.jonchambers.recap
+    #     com.apple.developer.ubiquity-container-identifiers:
+    #       - iCloud.com.jonchambers.recap
+    #     com.apple.developer.icloud-services:
+    #       - CloudDocuments
     configFiles:
       Debug: Recap/Resources/Secrets.xcconfig
       Release: Recap/Resources/Secrets.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jonchambers.recap
+        # Signing has to live here, not just in Xcode. The .xcodeproj is
+        # generated and gitignored, so a team set through the Signing &
+        # Capabilities editor is wiped by the next `xcodegen generate` — and
+        # because the Simulator doesn't sign, the breakage only shows up when
+        # building to a device ("Signing for 'Recap' requires a development
+        # team"). Keeping it in project.yml makes every regenerated project
+        # device-buildable.
+        DEVELOPMENT_TEAM: 2H7K7S5Y37
+        CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: 5.0
         TARGETED_DEVICE_FAMILY: "1,2"
         DEVELOPMENT_ASSET_PATHS: ""

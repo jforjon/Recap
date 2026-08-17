@@ -15,3 +15,6 @@ DerivedData/
 
 # Secrets
 **/Secrets.xcconfig
+
+# Local build output (-derivedDataPath build/DD)
+build/

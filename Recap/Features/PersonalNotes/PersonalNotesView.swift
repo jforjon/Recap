@@ -4,11 +4,28 @@ struct PersonalNotesView: View {
     let projectId: UUID
     let projectName: String
 
+    var body: some View {
+        PersonalNotesContent(owner: .project(projectId))
+            .navigationTitle(projectName)
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// The personal-notes list + composer, without navigation chrome, so it works
+/// as a standalone screen (`PersonalNotesView`) and embedded in the "Notes" chip
+/// tab of both a project and a single recording.
+///
+/// Notes are deleted one at a time by swiping a row. There is deliberately no
+/// delete-all: it's a single tap away from wiping everything, and swipe already
+/// covers clearing a short list.
+struct PersonalNotesContent: View {
+    let owner: PersonalNoteOwner
+
     @State private var notes: [PersonalNote] = []
     @State private var draft = ""
     @State private var isSending = false
+    @State private var isLoading = true
     @State private var errorMessage: String?
-    @State private var showDeleteAllConfirm = false
 
     @State private var voiceTranscriber = LiveTranscriber()
     @State private var isRecordingVoice = false
@@ -20,22 +37,30 @@ struct PersonalNotesView: View {
     var body: some View {
         VStack(spacing: 0) {
             List {
+                if notes.isEmpty && !isLoading {
+                    EmptyStateView(
+                        icon: "note.text",
+                        title: "No notes yet",
+                        message: "Jot a quick thought or record a voice note using the field below."
+                    )
+                    .recapCardRow()
+                }
                 ForEach(notes) { note in
-                    VStack(alignment: .leading, spacing: 4) {
+                    AppCard {
                         MarkdownText(markdown: note.content)
                         HStack {
                             if note.type == .voice {
                                 Label("Voice", systemImage: "mic.fill")
                                     .appTextStyle(.mono)
-                                    .foregroundStyle(AppColors.neutral500)
+                                    .foregroundStyle(AppColors.textTertiary)
                             }
                             Spacer()
                             Text(formatShortDate(note.createdAt))
                                 .appTextStyle(.mono)
-                                .foregroundStyle(AppColors.neutral500)
+                                .foregroundStyle(AppColors.textTertiary)
                         }
                     }
-                    .listRowBackground(AppColors.neutral200)
+                    .recapCardRow()
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             Task { await delete(note.id) }
@@ -56,24 +81,7 @@ struct PersonalNotesView: View {
                 .padding()
         }
         .background(AppColors.background.ignoresSafeArea())
-        .navigationTitle(projectName)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button("Delete all notes", role: .destructive) {
-                        showDeleteAllConfirm = true
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
         .task { await load() }
-        .alert("Delete all personal notes?", isPresented: $showDeleteAllConfirm) {
-            Button("Delete", role: .destructive) { Task { await deleteAll() } }
-            Button("Cancel", role: .cancel) {}
-        }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -141,11 +149,12 @@ struct PersonalNotesView: View {
 
     private func load() async {
         do {
-            notes = try await StorageService.getPersonalNotes(projectId)
+            notes = try await StorageService.getPersonalNotes(owner)
         } catch {
             if error.isCancellation { return }
             errorMessage = error.localizedDescription
         }
+        isLoading = false
     }
 
     private func send() async {
@@ -154,7 +163,7 @@ struct PersonalNotesView: View {
         isSending = true
         defer { isSending = false }
         do {
-            let note = try await StorageService.createPersonalNote(projectId: projectId, content: text, type: .text)
+            let note = try await StorageService.createPersonalNote(owner: owner, content: text, type: .text)
             notes.append(note)
             draft = ""
         } catch {
@@ -167,17 +176,6 @@ struct PersonalNotesView: View {
         notes.removeAll { $0.id == id }
         do {
             try await StorageService.deletePersonalNote(id)
-        } catch {
-            if error.isCancellation { return }
-            errorMessage = error.localizedDescription
-            await load()
-        }
-    }
-
-    private func deleteAll() async {
-        notes = []
-        do {
-            try await StorageService.deleteAllPersonalNotes(projectId: projectId)
         } catch {
             if error.isCancellation { return }
             errorMessage = error.localizedDescription
@@ -230,7 +228,7 @@ struct PersonalNotesView: View {
         guard !trimmed.isEmpty else { return }
 
         do {
-            let note = try await StorageService.createPersonalNote(projectId: projectId, content: trimmed, type: .voice)
+            let note = try await StorageService.createPersonalNote(owner: owner, content: trimmed, type: .voice)
             notes.append(note)
         } catch {
             if error.isCancellation { return }

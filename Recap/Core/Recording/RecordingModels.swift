@@ -15,4 +15,6 @@ struct PendingNote: Codable, Identifiable {
     var title: String
     var transcript: String
     var status: PendingNoteStatus
+    /// Optional so a manifest written by an older build still decodes.
+    var segments: [TranscriptSegment]?
 }

@@ -50,8 +50,11 @@ final class PendingNoteStore {
     }
 
     /// Persists the latest committed transcript for an in-progress recording.
-    func updateTranscript(_ id: UUID, transcript: String) {
-        mutate(id) { $0.transcript = transcript }
+    func updateTranscript(_ id: UUID, transcript: String, segments: [TranscriptSegment]? = nil) {
+        mutate(id) {
+            $0.transcript = transcript
+            if let segments { $0.segments = segments }
+        }
     }
 
     func setStatus(_ id: UUID, _ status: PendingNoteStatus) {

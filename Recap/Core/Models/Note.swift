@@ -20,6 +20,10 @@ struct Note: Codable, Identifiable, Hashable {
     var reactionType: ReactionType?
     var summary: String?
     var transcript: String?
+    /// Word-timed transcript, present only for recordings made after timing
+    /// capture shipped. `transcript` remains the source of truth for search,
+    /// export and summaries; this drives synced playback and paragraph breaks.
+    var transcriptSegments: [TranscriptSegment]?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -34,6 +38,7 @@ struct Note: Codable, Identifiable, Hashable {
         case reactionType = "reaction_type"
         case summary
         case transcript
+        case transcriptSegments = "transcript_segments"
         case createdAt = "created_at"
     }
 }
@@ -45,6 +50,7 @@ struct NoteInsert: Encodable {
     let title: String
     let summary: String
     let transcript: String?
+    var transcriptSegments: [TranscriptSegment]?
     let eventName: String?
     let speakerContext: String?
     let category: NoteCategory?
@@ -57,6 +63,7 @@ struct NoteInsert: Encodable {
         case title
         case summary
         case transcript
+        case transcriptSegments = "transcript_segments"
         case eventName = "event_name"
         case speakerContext = "speaker_context"
         case category
