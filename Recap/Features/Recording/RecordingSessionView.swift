@@ -78,38 +78,44 @@ struct RecordingSessionView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: Spacing.s5) {
+        VStack(spacing: Spacing.s4) {
+            // Elapsed, meter, send on one line: the duration reads at the leading
+            // edge where a running clock is expected, the meter takes every point
+            // between, and send sits where a composer's send button sits. The row
+            // height is pinned so it can't shift as the digits or bars change.
             HStack(spacing: Spacing.s4) {
-                RecordingWaveformView(level: recordingManager.audioLevel)
                 Text(formattedElapsed)
-                    .appTextStyle(.monoMedium)
+                    .appTextStyle(.monoLarge)
                     .foregroundStyle(AppColors.textSecondary)
-                    .frame(minWidth: 48, alignment: .trailing)
+                    .frame(minWidth: 46, alignment: .leading)
                     .monospacedDigit()
-            }
-            .padding(.horizontal, Spacing.s6)
 
-            Button {
-                recordingManager.stopRecording()
-            } label: {
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 24, weight: .semibold))
-                    .frame(width: 68, height: 68)
-                    .background(AppColors.accent)
-                    .foregroundStyle(AppColors.accentText)
-                    .clipShape(Circle())
+                RecordingWaveformView(level: recordingManager.audioLevel)
+                    .frame(maxWidth: .infinity)
+
+                Button {
+                    recordingManager.stopRecording()
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 48, height: 48)
+                        .background(AppColors.accent)
+                        .foregroundStyle(AppColors.accentText)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Save recording")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Save recording")
+            .frame(height: 48)
 
             Text("Transcribed on device — nothing leaves your phone.")
                 .appTextStyle(.small)
                 .foregroundStyle(AppColors.textTertiary)
                 .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, Spacing.s4)
-        .padding(.top, Spacing.s5)
-        .padding(.bottom, Spacing.s6)
+        .padding(.horizontal, Spacing.s5)
+        .padding(.top, Spacing.s4)
+        .padding(.bottom, Spacing.s5)
         .frame(maxWidth: .infinity)
         .background(
             AppColors.background

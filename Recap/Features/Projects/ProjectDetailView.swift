@@ -118,6 +118,12 @@ struct ProjectDetailView: View {
             }
             Task { await load() }
         }
+        // Same as the Library: nothing that happens behind the full-screen
+        // capture cover reaches this list, so it reloads on the way back.
+        .onChange(of: recordingManager.phase) { _, phase in
+            guard phase == .idle else { return }
+            Task { await load() }
+        }
         .audioImporter(isPresented: $showImportPicker,
                        importManager: importManager,
                        projectId: projectId)
@@ -213,11 +219,13 @@ struct ProjectDetailView: View {
                 }
                 ForEach(pendingUploads) { upload in
                     PendingRecordingRow(upload: upload)
+                        .recapCardRow()
                 }
                 ForEach(importManager.inFlight) { progress in
                     ImportProgressRow(progress: progress) {
                         importManager.dismiss(progress.id)
                     }
+                    .recapCardRow()
                 }
                 ForEach(notes) { note in
                     Button {

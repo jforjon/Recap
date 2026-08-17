@@ -27,6 +27,9 @@ struct AppTextStyle {
     static let label    = AppTextStyle(font: AppFont.sans(12, medium: true), tracking: 12 * 0.07)
     static let mono     = AppTextStyle(font: AppFont.mono(12), tracking: 0)
     static let monoMedium = AppTextStyle(font: AppFont.mono(12, medium: true), tracking: 0)
+    /// Mono at the `small` size — for a figure that has to hold its own next to a
+    /// control rather than sit inline with body text (the recording elapsed time).
+    static let monoLarge = AppTextStyle(font: AppFont.mono(14, medium: true), tracking: 0)
 }
 
 extension View {

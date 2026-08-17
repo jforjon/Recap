@@ -197,6 +197,17 @@ struct LibraryContentView: View {
             }
             Task { await load() }
         }
+        // Capture is a full-screen cover, and this list doesn't take updates
+        // while it's up: a recording that lands during the dismiss animation —
+        // which is most of them — drops its "Saving…" row and misses the insert
+        // above, leaving the Library looking unchanged until a pull-to-refresh.
+        // Returning to idle is the one moment guaranteed to be seen. If the
+        // upload is still in flight at that point the pending row is on screen
+        // to cover it, and the insert above lands normally once it finishes.
+        .onChange(of: recordingManager.phase) { _, phase in
+            guard phase == .idle else { return }
+            Task { await load() }
+        }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {

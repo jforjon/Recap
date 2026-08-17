@@ -7,17 +7,20 @@ import SwiftUI
 /// instead of a chart of the recent past. Loudness sets the amplitude of that
 /// oscillation: silence leaves a low idle shimmer, speech swings the bars out to
 /// their full height.
+///
+/// The row fills whatever width it is given: the bar pitch is fixed and the
+/// count follows from it, so the density is the same on every device and the
+/// meter never leaves a gap beside the elapsed time.
 struct RecordingWaveformView: View {
     /// Current smoothed loudness, 0...1.
     let level: CGFloat
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let barCount = 15
     private let barWidth: CGFloat = 3
     private let barSpacing: CGFloat = 2
-    private let minHeight: CGFloat = 9
-    private let maxHeight: CGFloat = 34
+    private let minHeight: CGFloat = 7
+    private let maxHeight: CGFloat = 28
 
     var body: some View {
         Group {
@@ -45,6 +48,10 @@ struct RecordingWaveformView: View {
     /// - Parameter swing: where in its cycle a given bar is, 0...1.
     private func canvas(swing: @escaping (Int) -> Double) -> some View {
         Canvas { context, size in
+            // As many bars as fit at the fixed pitch. Whatever is left over is
+            // under one pitch — a couple of points, split either side — so
+            // centring the run reads as flush without stretching the gaps.
+            let barCount = max(1, Int((size.width + barSpacing) / (barWidth + barSpacing)))
             let totalWidth = CGFloat(barCount) * barWidth
                 + CGFloat(barCount - 1) * barSpacing
             let originX = (size.width - totalWidth) / 2

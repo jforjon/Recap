@@ -65,19 +65,23 @@ struct NoteDetailView: View {
                     .padding(.top)
                     .padding(.bottom, Spacing.sm)
 
-                    // Notes is a feed with its own list + pinned composer, so it
-                    // manages its own height rather than sitting in the scroll view.
-                    if selectedTab == .notes {
+                    // Two tabs manage their own height rather than sitting in the
+                    // shared scroll view: Notes is a feed with its own list and
+                    // pinned composer, and Transcript pins the player under a
+                    // transcript that scrolls behind it.
+                    switch selectedTab {
+                    case .notes:
                         PersonalNotesContent(owner: .recording(noteId))
-                    } else {
+                    case .transcript:
+                        transcriptSection(note)
+                    default:
                         ScrollView {
                             VStack(alignment: .leading, spacing: Spacing.lg) {
                                 switch selectedTab {
                                 case .infos: infosSection(note)
-                                case .transcript: transcriptSection(note)
                                 case .summary: summarySection(note)
                                 case .export: exportSection(note)
-                                case .notes: EmptyView()
+                                case .notes, .transcript: EmptyView()
                                 }
                             }
                             .padding()
@@ -193,11 +197,16 @@ struct NoteDetailView: View {
     private func transcriptSection(_ note: Note) -> some View {
         let transcript = transcriptText(note)
         if transcript.isEmpty {
-            EmptyStateView(
-                icon: "text.alignleft",
-                title: "No transcript",
-                message: "This recording doesn’t have a transcript. Transcription happens on-device while you record."
-            )
+            // Owns its scrolling now that this tab sits outside the shared one.
+            ScrollView {
+                EmptyStateView(
+                    icon: "text.alignleft",
+                    title: "No transcript",
+                    message: "This recording doesn’t have a transcript. Transcription happens on-device while you record."
+                )
+                .padding()
+            }
+            .recapBackground()
         } else {
             SyncedTranscriptView(note: note, showDeleteAudioConfirm: $showDeleteAudioConfirm)
                 // Rebuilds the player when the audio is deleted out from under it.
