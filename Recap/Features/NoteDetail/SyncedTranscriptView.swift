@@ -42,7 +42,7 @@ struct SyncedTranscriptView: View {
 
                 Text("TRANSCRIPT")
                     .appTextStyle(.label)
-                    .foregroundStyle(AppColors.neutral600)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 if paragraphs.isEmpty {
                     untimedParagraphs
@@ -230,7 +230,7 @@ struct SyncedTranscriptView: View {
                     id: \.offset) { _, paragraph in
                 Text(paragraph)
                     .appTextStyle(.body)
-                    .foregroundStyle(AppColors.neutral800)
+                    .foregroundStyle(AppColors.textPrimary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -263,7 +263,7 @@ struct SyncedTranscriptView: View {
                 if player.hasAudio, let start = paragraph.first?.start {
                     Text(TranscriptPlayer.formatTime(start))
                         .appTextStyle(.mono)
-                        .foregroundStyle(AppColors.neutral500)
+                        .foregroundStyle(AppColors.textTertiary)
                 }
                 Text(attributed(paragraph))
                     .appTextStyle(.body)
@@ -289,7 +289,7 @@ struct SyncedTranscriptView: View {
                 piece.foregroundColor = AppColors.accentGraphic
             } else {
                 piece.foregroundColor = active == nil
-                    ? AppColors.neutral800
+                    ? AppColors.textPrimary
                     : AppColors.textSecondary
             }
             result += piece

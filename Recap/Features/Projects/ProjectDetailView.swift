@@ -52,7 +52,7 @@ struct ProjectDetailView: View {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         Text(project.name)
                             .appTextStyle(.heading)
-                            .foregroundStyle(AppColors.neutral800)
+                            .foregroundStyle(AppColors.textPrimary)
                         chipBar
                     }
                     .padding(.horizontal)
@@ -237,7 +237,7 @@ struct ProjectDetailView: View {
                             }
                             Text(note.title)
                                 .appTextStyle(.bodyMedium)
-                                .foregroundStyle(AppColors.neutral800)
+                                .foregroundStyle(AppColors.textPrimary)
                         }
                     }
                     .buttonStyle(.plain)
@@ -284,7 +284,7 @@ struct ProjectDetailView: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("SUMMARY")
                     .appTextStyle(.label)
-                    .foregroundStyle(AppColors.neutral600)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 MarkdownText(markdown: summary)
 

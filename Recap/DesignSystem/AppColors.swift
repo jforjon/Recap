@@ -14,20 +14,61 @@ extension Color {
 }
 
 /// Design tokens for the "recap — iOS dark UI" system: soft-charcoal surfaces, a
-/// sapphire accent, and Apple's slightly-cool label white for text. Dark-mode
-/// only (the app pins `.preferredColorScheme(.dark)`), so tokens are single
-/// values rather than light/dark pairs.
+/// sapphire accent, and a cool-neutral text ramp. Dark-mode only (the app pins
+/// `.preferredColorScheme(.dark)`), so tokens are single values rather than
+/// light/dark pairs.
+///
+/// Two tiers, and they are not interchangeable:
+///
+/// * **Palette** (`neutral*`, `blue*`) — position on a lightness ladder, nothing
+///   more. Named by number so a value can be repositioned without renaming.
+///   Screens must not reference these directly.
+/// * **Roles** (`background`, `textSecondary`, `accent`, …) — what a colour is
+///   *for*. Every role is an alias onto a palette step. Screens use these.
+///
+/// The one deliberate exception is the hairlines, which are white at low alpha
+/// rather than ramp steps: a hairline has to read against whatever it is drawn
+/// on, and no single opaque value does that. `separator` composites to `#252629`
+/// on `background`, `#2E3035` on `surface` and `#3E4147` on `surfaceElevated`.
 enum AppColors {
-    /// Apple's label white (rgba 235,235,245) — text opacities are taken from this.
-    private static let label = Color(red: 235 / 255, green: 235 / 255, blue: 245 / 255)
+
+    // MARK: - Neutral ramp (palette)
+    //
+    // One cool-grey hue on a ladder from near-white to the deepest charcoal,
+    // eleven steps on round hundreds. Every step is load-bearing: each one has
+    // a role pointing at it, and each value is a tone the app actually paints
+    // with. The ramp was built by anchoring those shipping tones and filling
+    // the void between them in OKLCH — before it existed nothing opaque sat
+    // between L 33 and L 94, and every mid-grey was an opacity over Apple's
+    // label white.
+    //
+    // The lightness spacing is deliberately uneven, in three places for three
+    // reasons. 0 → 100 is only 2.4 because primary and bright text genuinely
+    // are near-identical. 200 → 300 is a double-width 17.7: a step sat there
+    // until nothing needed it, and dropping it was what let the dark end land
+    // on round hundreds instead of a 950 half-step. And the bottom tightens to
+    // 7.2, 4.7, 3.6 because dark UI needs finer discrimination between adjacent
+    // surfaces than an accent hue does — which is also why the blue ramp,
+    // spanning 68 points of lightness against this one's 80, stops at 900.
+    //
+    // A grey around L 77 goes back into the 200 → 300 gap if one is ever needed.
+    static let neutral0    = Color(hex: "F5F5F7") // L 97.1
+    static let neutral100  = Color(hex: "EDEDEF") // L 94.7
+    static let neutral200  = Color(hex: "D0D0D3") // L 85.9
+    static let neutral300  = Color(hex: "98989D") // L 68.2
+    static let neutral400  = Color(hex: "7D7E83") // L 59.3
+    static let neutral500  = Color(hex: "63646A") // L 50.5
+    static let neutral600  = Color(hex: "4A4C52") // L 41.6
+    static let neutral700  = Color(hex: "32353B") // L 32.8
+    static let neutral800  = Color(hex: "212328") // L 25.6
+    static let neutral900  = Color(hex: "17181B") // L 20.9
+    static let neutral1000 = Color(hex: "0F1012") // L 17.3
 
     // MARK: - Blue ramp (palette)
     //
     // One hue (~267°) on an even lightness ladder, with chroma peaking at 600.
     // The four blues the app actually ships anchor 0/300/600/900; the rest are
-    // interpolated between them in OKLCH. This tier carries no meaning — it is
-    // named by position so it can be repositioned without renaming. Screens
-    // should use the semantic accents below, not these.
+    // interpolated between them in OKLCH.
     static let blue0   = Color(hex: "EAF0FF")
     static let blue100 = Color(hex: "C6D6FD")
     static let blue200 = Color(hex: "A2BBFA")
@@ -55,22 +96,24 @@ enum AppColors {
     /// `background`, which is what both call sites sit on.
     static let accentTint = blue900
 
-    // MARK: - Surfaces (charcoal ramp — 4 tones)
-    static let backgroundDeep  = Color(hex: "0F1012") // canvas behind everything (iPad / edges)
-    static let background      = Color(hex: "17181B") // screen background, bars & side panes
-    static let surface         = Color(hex: "212328") // cards & inputs
-    static let surfaceElevated = Color(hex: "32353B") // menus / dialogs; also pressed rows
+    // MARK: - Surfaces
+    static let backgroundDeep  = neutral1000 // canvas behind everything (iPad / edges)
+    static let background      = neutral900  // screen background, bars & side panes
+    static let surface         = neutral800  // cards & inputs
+    static let surfaceElevated = neutral700  // menus / dialogs; also pressed rows
 
-    // MARK: - Hairlines (pure white, low alpha)
+    // MARK: - Hairlines (pure white, low alpha — see the type comment)
     static let separator       = Color.white.opacity(0.06)
     static let separatorStrong = Color.white.opacity(0.10)
 
     // MARK: - Text
-    static let textPrimary   = Color(hex: "F5F5F7")
-    static let textBright    = Color(hex: "EDEDEF")
-    static let textSecondary = label.opacity(0.60)
-    static let textTertiary  = label.opacity(0.45)
-    static let textFaint     = label.opacity(0.35)
+    static let textPrimary   = neutral0
+    static let textBright    = neutral100
+    static let textMuted     = neutral200
+    static let textSecondary = neutral300
+    static let textTertiary  = neutral400
+    static let textFaint     = neutral500
+    static let textDisabled  = neutral600
 
     // MARK: - Destructive (3 reds)
     static let destructiveText = Color(hex: "FF6961") // light — text / icons
@@ -81,7 +124,7 @@ enum AppColors {
     static let categoryTalk     = Color(hex: "E9B44C") // gold
     static let categoryTraining = Color(hex: "E97C5E") // coral
     static let categoryPanel    = Color(hex: "C9A0DC") // lavender
-    static let categoryNote     = label.opacity(0.45)  // neutral "Note" / "Other"
+    static let categoryNote     = neutral400           // neutral "Note" / "Other"
 
     // MARK: - Generic chip (filters / language)
     static let chipFill   = Color.white.opacity(0.07)
@@ -93,41 +136,21 @@ enum AppColors {
     static let chipBackground = chipFill
     static let chipBorder     = chipStroke
 
-    // MARK: - Status (kept for existing call sites)
+    // MARK: - Status
     static let success500 = Color(hex: "5FE3BE")
     /// The app's former brand amber, now purely semantic — a warning must not
     /// read as the accent, and with the accent gone blue it no longer can.
     static let warning500 = Color(hex: "F0A24A")
     static let error500   = destructive
-
-    /// Apple's label white, exposed for opacity-derived text/icon tints.
-    static let labelWhite = label
-
-    // MARK: - Back-compat neutral scale
-    // The prior grayscale scale is remapped onto the new design roles so existing
-    // screen code (which references neutralX for text, dividers and surfaces)
-    // adopts the charcoal/amber system automatically.
-    static let neutral0   = textPrimary          // bright text / on-dark
-    static let neutral100 = background            // screen background
-    static let neutral200 = surface               // card / row surface
-    static let neutral300 = separator             // dividers
-    static let neutral400 = label.opacity(0.30)
-    static let neutral500 = textTertiary          // muted metadata
-    static let neutral600 = textSecondary         // secondary text / labels
-    static let neutral700 = textBright            // chip / control text
-    static let neutral800 = textPrimary           // primary text
-    static let neutral900 = textPrimary           // strongest text
 }
 
-/// `Color.echo*` token accessors, sourced from `AppColors` so there's a single
-/// source of truth. Opacity-derived tints (e.g. `.recapLabel.opacity(0.45)`) are
-/// applied at the call site.
+/// `Color.recap*` token accessors, sourced from `AppColors` so there's a single
+/// source of truth.
 extension Color {
-    static let recapSurface        = AppColors.surface        // #212328
-    static let recapSurfacePressed = AppColors.surfaceElevated // #32353B (pressed row highlight)
+    static let recapSurface        = AppColors.surface         // neutral800
+    static let recapSurfacePressed = AppColors.surfaceElevated // neutral700 (pressed row highlight)
     /// The *foreground* accent — every `recapAccent` call site is a glyph, a label
     /// or a tint, never a fill behind text.
-    static let recapAccent         = AppColors.accentGraphic  // #7FA0F5
-    static let recapTextPrimary    = AppColors.textPrimary    // #F5F5F7
-    static let recapLabel          = AppColors.labelWhite     // #EBEBF5 (use with .opacity)
+    static let recapAccent         = AppColors.accentGraphic   // blue300
+    static let recapTextPrimary    = AppColors.textPrimary     // neutral0
 }

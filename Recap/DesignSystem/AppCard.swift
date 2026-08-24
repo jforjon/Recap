@@ -30,7 +30,7 @@ struct FilterChip: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isActive ? AppColors.accentText : AppColors.labelWhite.opacity(0.7))
+                .foregroundStyle(isActive ? AppColors.accentText : AppColors.textSecondary)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
                 .background(isActive ? AppColors.accent : AppColors.chipFill)

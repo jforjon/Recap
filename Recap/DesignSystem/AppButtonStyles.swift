@@ -115,7 +115,7 @@ struct SmallDestructiveButtonStyle: ButtonStyle {
 struct IconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(AppColors.textBright.opacity(0.85))
+            .foregroundStyle(AppColors.textMuted)
             .frame(width: 44, height: 44)
             .background(
                 Circle().fill(Color.white.opacity(configuration.isPressed ? 0.14 : 0.07))

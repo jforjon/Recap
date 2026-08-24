@@ -221,7 +221,7 @@ struct LibraryContentView: View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15))
-                .foregroundStyle(AppColors.labelWhite.opacity(0.45))
+                .foregroundStyle(AppColors.textTertiary)
             TextField("Search transcripts, summaries, notes", text: $searchText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -230,7 +230,7 @@ struct LibraryContentView: View {
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(AppColors.labelWhite.opacity(0.35))
+                        .foregroundStyle(AppColors.textFaint)
                 }
                 .buttonStyle(.plain)
             }
@@ -270,11 +270,11 @@ struct LibraryContentView: View {
                 Spacer()
                 Text(formatShortDate(note.createdAt))
                     .appTextStyle(.mono)
-                    .foregroundStyle(AppColors.neutral500)
+                    .foregroundStyle(AppColors.textTertiary)
             }
             Text(note.title)
                 .appTextStyle(.bodyMedium)
-                .foregroundStyle(AppColors.neutral800)
+                .foregroundStyle(AppColors.textPrimary)
 
             matchContext(field: hit.field, snippet: hit.snippet)
         }
@@ -288,7 +288,7 @@ struct LibraryContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(field.label)
                     .appTextStyle(.label)
-                    .foregroundStyle(AppColors.neutral500)
+                    .foregroundStyle(AppColors.textTertiary)
                 Text(snippet)
                     .appTextStyle(.small)
                     .foregroundStyle(AppColors.textSecondary)
@@ -462,7 +462,7 @@ private struct NewProjectSheet: View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
             Text("PROJECT NAME")
                 .appTextStyle(.label)
-                .foregroundStyle(AppColors.neutral600)
+                .foregroundStyle(AppColors.textSecondary)
             AppTextField(title: "e.g. Summit 2026", text: $name)
             Spacer()
             Button(isBusy ? "Creating…" : "Create project") {
@@ -543,11 +543,11 @@ private struct NewProjectSheet: View {
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
-                    .foregroundStyle(isSelected ? AppColors.accentGraphic : AppColors.labelWhite.opacity(0.25))
+                    .foregroundStyle(isSelected ? AppColors.accentGraphic : AppColors.textDisabled)
             }
             Text(note.title)
                 .appTextStyle(.bodyMedium)
-                .foregroundStyle(AppColors.neutral800)
+                .foregroundStyle(AppColors.textPrimary)
         }
         .padding(Spacing.s3 + 1)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -564,7 +564,7 @@ private struct NewProjectSheet: View {
         HStack(spacing: 9) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15))
-                .foregroundStyle(AppColors.labelWhite.opacity(0.45))
+                .foregroundStyle(AppColors.textTertiary)
             TextField("Search recordings", text: $searchText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -573,7 +573,7 @@ private struct NewProjectSheet: View {
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(AppColors.labelWhite.opacity(0.35))
+                        .foregroundStyle(AppColors.textFaint)
                 }
                 .buttonStyle(.plain)
             }

@@ -117,7 +117,7 @@ struct AppShellView: View {
                             Spacer()
                             Text("\(item.noteCount)")
                                 .appTextStyle(.mono)
-                                .foregroundStyle(AppColors.neutral500)
+                                .foregroundStyle(AppColors.textTertiary)
                         }
                         .tag(AppNavigationModel.SidebarSelection.project(item.project.id))
                     }

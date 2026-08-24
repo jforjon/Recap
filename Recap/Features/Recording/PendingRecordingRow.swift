@@ -16,17 +16,17 @@ struct PendingRecordingRow: View {
                 Spacer()
                 Text(upload.createdAt, format: .dateTime.day().month(.abbreviated).year())
                     .appTextStyle(.mono)
-                    .foregroundStyle(AppColors.neutral500)
+                    .foregroundStyle(AppColors.textTertiary)
             }
             Text(upload.title)
                 .appTextStyle(.bodyMedium)
-                .foregroundStyle(AppColors.neutral800)
+                .foregroundStyle(AppColors.textPrimary)
 
             Text(upload.isWaiting
                  ? "Saved on this phone. It uploads as soon as you’re back online."
                  : "Saving to your library…")
                 .appTextStyle(.small)
-                .foregroundStyle(AppColors.neutral500)
+                .foregroundStyle(AppColors.textTertiary)
         }
     }
 }

@@ -41,7 +41,7 @@ struct ExportTabView: View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             Text("INCLUDE")
                 .appTextStyle(.label)
-                .foregroundStyle(AppColors.neutral600)
+                .foregroundStyle(AppColors.textSecondary)
 
             VStack(spacing: 0) {
                 toggle("Summary", isOn: $options.includeSummary, enabled: hasSummary)
@@ -108,7 +108,7 @@ struct ExportTabView: View {
         return Toggle(isOn: display) {
             Text(enabled ? title : "\(title) — none yet")
                 .appTextStyle(.body)
-                .foregroundStyle(enabled ? AppColors.textPrimary : AppColors.neutral500)
+                .foregroundStyle(enabled ? AppColors.textPrimary : AppColors.textTertiary)
         }
         .disabled(!enabled)
         .tint(AppColors.accentGraphic)

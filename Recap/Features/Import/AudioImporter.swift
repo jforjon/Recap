@@ -113,7 +113,7 @@ struct ImportProgressRow: View {
             }
             Text(progress.title)
                 .appTextStyle(.bodyMedium)
-                .foregroundStyle(AppColors.neutral800)
+                .foregroundStyle(AppColors.textPrimary)
 
             if let failure = progress.failure {
                 Text(failure)
@@ -124,7 +124,7 @@ struct ImportProgressRow: View {
                     .tint(AppColors.accentGraphic)
                 Text("Transcribing on device — you can keep using recap.")
                     .appTextStyle(.small)
-                    .foregroundStyle(AppColors.neutral500)
+                    .foregroundStyle(AppColors.textTertiary)
             }
         }
     }

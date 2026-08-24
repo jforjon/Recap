@@ -57,7 +57,7 @@ struct NoteDetailView: View {
                     VStack(alignment: .leading, spacing: Spacing.md) {
                         Text(note.title)
                             .appTextStyle(.heading)
-                            .foregroundStyle(AppColors.neutral800)
+                            .foregroundStyle(AppColors.textPrimary)
 
                         chipBar
                     }
@@ -187,7 +187,7 @@ struct NoteDetailView: View {
             Spacer()
             Text(formatShortDate(note.createdAt))
                 .appTextStyle(.mono)
-                .foregroundStyle(AppColors.neutral500)
+                .foregroundStyle(AppColors.textTertiary)
         }
 
         speakerSection(note)
@@ -226,7 +226,7 @@ struct NoteDetailView: View {
             } label: {
                 Label("New project", systemImage: "plus")
             }
-            .foregroundStyle(AppColors.neutral500)
+            .foregroundStyle(AppColors.textTertiary)
         }
     }
 
@@ -267,7 +267,7 @@ struct NoteDetailView: View {
             HStack {
                 Text("SPEAKER & CONTEXT")
                     .appTextStyle(.label)
-                    .foregroundStyle(AppColors.neutral600)
+                    .foregroundStyle(AppColors.textSecondary)
                 Spacer()
                 if !isEditingSpeakerContext {
                     Button(context.isEmpty ? "Add" : "Edit") {
@@ -299,7 +299,7 @@ struct NoteDetailView: View {
             } else {
                 Text(context.isEmpty ? "No speaker or context added." : context)
                     .appTextStyle(.body)
-                    .foregroundStyle(context.isEmpty ? AppColors.neutral500 : AppColors.neutral800)
+                    .foregroundStyle(context.isEmpty ? AppColors.textTertiary : AppColors.textPrimary)
             }
         }
     }
@@ -311,7 +311,7 @@ struct NoteDetailView: View {
             VStack(alignment: .leading, spacing: Spacing.sm) {
                 Text("SUMMARY")
                     .appTextStyle(.label)
-                    .foregroundStyle(AppColors.neutral600)
+                    .foregroundStyle(AppColors.textSecondary)
 
                 MarkdownText(markdown: summary)
 

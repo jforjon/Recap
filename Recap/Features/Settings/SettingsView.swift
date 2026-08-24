@@ -190,7 +190,7 @@ struct SettingsView: View {
                 if editing == .languages {
                     Text("Add the languages you record in. The default shows next to Record. Leave empty to just use your device language.")
                         .appTextStyle(.small)
-                        .foregroundStyle(AppColors.neutral500)
+                        .foregroundStyle(AppColors.textTertiary)
 
                     ForEach(supportedLanguages, id: \.identifier) { locale in
                         let code = locale.identifier(.bcp47)
@@ -199,7 +199,7 @@ struct SettingsView: View {
                         } label: {
                             HStack {
                                 Text(displayName(code))
-                                    .foregroundStyle(AppColors.neutral800)
+                                    .foregroundStyle(AppColors.textPrimary)
                                 Spacer()
                                 if selectedLanguages.contains(code) {
                                     Image(systemName: "checkmark")
@@ -225,7 +225,7 @@ struct SettingsView: View {
                 } else if selectedLanguages.isEmpty {
                     Text("Using your device language")
                         .appTextStyle(.body)
-                        .foregroundStyle(AppColors.neutral500)
+                        .foregroundStyle(AppColors.textTertiary)
                 } else {
                     ForEach(selectedLanguages, id: \.self) { code in
                         HStack {
@@ -273,7 +273,7 @@ struct SettingsView: View {
                                 .foregroundStyle(AppColors.textPrimary)
                             Text(option.detail)
                                 .appTextStyle(.small)
-                                .foregroundStyle(AppColors.neutral600)
+                                .foregroundStyle(AppColors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                             // Choosing iCloud when it isn't set up would silently
                             // behave like "on this iPhone", so say so up front.
@@ -302,7 +302,7 @@ struct SettingsView: View {
                     ProgressView()
                     Text("Moving recordings…")
                         .appTextStyle(.small)
-                        .foregroundStyle(AppColors.neutral600)
+                        .foregroundStyle(AppColors.textSecondary)
                 }
             } else if audioLocation != .off {
                 readOnlyRow(label: "Audio stored", value: audioUsage)
@@ -312,7 +312,7 @@ struct SettingsView: View {
         } footer: {
             Text("With this off, only the transcript is kept and nothing is ever written to disk — the way recap has always worked. Turning it on lets you play a recording back with the transcript following along. Roughly 15 MB per hour.")
                 .appTextStyle(.small)
-                .foregroundStyle(AppColors.neutral600)
+                .foregroundStyle(AppColors.textSecondary)
         }
     }
 
@@ -363,7 +363,7 @@ struct SettingsView: View {
                 // back out for display, by design.
                 Text(hasAnthropicKey ? "Set" : "Not set")
                     .appTextStyle(.body)
-                    .foregroundStyle(hasAnthropicKey ? AppColors.textPrimary : AppColors.neutral500)
+                    .foregroundStyle(hasAnthropicKey ? AppColors.textPrimary : AppColors.textTertiary)
                 savedNote(keySavedMessage)
 
                 if hasAnthropicKey {
@@ -380,7 +380,7 @@ struct SettingsView: View {
         } footer: {
             Text("Stored only on this device — never uploaded to recap's servers, and not included in backups or iCloud. Summaries run on your own Anthropic account instead of recap credits.")
                 .appTextStyle(.small)
-                .foregroundStyle(AppColors.neutral600)
+                .foregroundStyle(AppColors.textSecondary)
         }
     }
 
@@ -474,7 +474,7 @@ struct SettingsView: View {
     private func fieldLabel(_ text: String) -> some View {
         Text(text)
             .appTextStyle(.label)
-            .foregroundStyle(AppColors.neutral600)
+            .foregroundStyle(AppColors.textSecondary)
     }
 
     @ViewBuilder
@@ -482,7 +482,7 @@ struct SettingsView: View {
         HStack {
             Text(label)
                 .appTextStyle(.body)
-                .foregroundStyle(AppColors.neutral600)
+                .foregroundStyle(AppColors.textSecondary)
             Spacer()
             Text(value)
                 .appTextStyle(.body)

@@ -61,13 +61,13 @@ struct ProjectCard: View {
                 Text(countsText)
                     .font(.system(.caption, design: .monospaced))
                     .textCase(.uppercase)
-                    .foregroundStyle(Color.recapLabel.opacity(0.45))
+                    .foregroundStyle(AppColors.textTertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Image(systemName: "chevron.right")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Color.recapLabel.opacity(0.30))
+                .foregroundStyle(AppColors.textFaint)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -82,11 +82,11 @@ struct ProjectCard: View {
 
     private var iconTile: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(isSelected ? Color.recapAccent.opacity(0.14) : Color.white.opacity(0.06))
+            .fill(isSelected ? Color.recapAccent.opacity(0.14) : AppColors.chipFill)
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .strokeBorder(
-                        isSelected ? Color.recapAccent.opacity(0.28) : Color.white.opacity(0.08),
+                        isSelected ? Color.recapAccent.opacity(0.28) : AppColors.chipStroke,
                         lineWidth: 1
                     )
             )
@@ -94,7 +94,7 @@ struct ProjectCard: View {
             .overlay(
                 Image(systemName: "folder")
                     .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.recapAccent : Color.recapLabel.opacity(0.60))
+                    .foregroundStyle(isSelected ? Color.recapAccent : AppColors.textSecondary)
             )
     }
 
@@ -120,12 +120,12 @@ struct NewProjectCard: View {
                 .overlay(
                     Image(systemName: "plus")
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(Color.recapLabel.opacity(0.45))
+                        .foregroundStyle(AppColors.textTertiary)
                 )
 
             Text("New project")
                 .font(.system(.callout, design: .default).weight(.regular))
-                .foregroundStyle(Color.recapLabel.opacity(0.45))
+                .foregroundStyle(AppColors.textTertiary)
 
             Spacer(minLength: 0)
         }
@@ -149,6 +149,6 @@ struct NewProjectCard: View {
     .padding(16)
     .frame(maxWidth: 420)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(Color(hex: "17181B"))
+    .background(AppColors.background)
     .preferredColorScheme(.dark)
 }
