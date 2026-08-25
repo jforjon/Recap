@@ -77,20 +77,21 @@ struct SettingsView: View {
         Section {
             if editing == .account {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
-                    fieldLabel("EMAIL")
-                    AppTextField(title: "you@example.com", text: $emailDraft,
+                    AppTextField(label: "Email", placeholder: "you@example.com",
+                                 text: $emailDraft,
                                  contentType: .emailAddress, keyboardType: .emailAddress)
 
-                    fieldLabel("NEW PASSWORD")
-                    AppSecureField(title: "Leave blank to keep current",
+                    AppSecureField(label: "New password",
+                                   placeholder: "Leave blank to keep current",
                                    text: $newPassword, contentType: .newPassword)
-                    AppSecureField(title: "Confirm new password",
+                    AppSecureField(label: "Confirm password",
+                                   placeholder: "Re-enter your new password",
                                    text: $confirmPassword, contentType: .newPassword)
 
                     if let accountError {
                         Text(accountError)
                             .appTextStyle(.small)
-                            .foregroundStyle(AppColors.destructiveText)
+                            .foregroundStyle(AppColors.destructive.light)
                     }
 
                     editorButtons(
@@ -280,7 +281,7 @@ struct SettingsView: View {
                             if option == .cloud && !AudioStore.isCloudAvailable {
                                 Text("iCloud Drive is off or you're not signed in — recordings will stay on this iPhone.")
                                     .appTextStyle(.small)
-                                    .foregroundStyle(AppColors.warning500)
+                                    .foregroundStyle(AppColors.warning.default)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -342,12 +343,13 @@ struct SettingsView: View {
         Section {
             if editing == .apiKey {
                 VStack(alignment: .leading, spacing: Spacing.s4) {
-                    AppSecureField(title: "sk-ant-…", text: $keyDraft)
+                    AppSecureField(label: "Anthropic API key",
+                                   placeholder: "sk-ant-…", text: $keyDraft)
 
                     if let keyError {
                         Text(keyError)
                             .appTextStyle(.small)
-                            .foregroundStyle(AppColors.destructiveText)
+                            .foregroundStyle(AppColors.destructive.light)
                     }
 
                     editorButtons(
@@ -471,12 +473,6 @@ struct SettingsView: View {
     }
 
     @ViewBuilder
-    private func fieldLabel(_ text: String) -> some View {
-        Text(text)
-            .appTextStyle(.label)
-            .foregroundStyle(AppColors.textSecondary)
-    }
-
     @ViewBuilder
     private func readOnlyRow(label: String, value: String) -> some View {
         HStack {
@@ -496,7 +492,7 @@ struct SettingsView: View {
         if let message {
             Text(message)
                 .appTextStyle(.small)
-                .foregroundStyle(AppColors.success500)
+                .foregroundStyle(AppColors.success.default)
         }
     }
 

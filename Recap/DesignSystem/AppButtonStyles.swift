@@ -66,8 +66,8 @@ struct DestructiveButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .pillBox(.regular)
-            .foregroundStyle(AppColors.destructiveText)
-            .background(Capsule().strokeBorder(AppColors.destructiveDeep, lineWidth: 1))
+            .foregroundStyle(AppColors.destructive.light)
+            .background(Capsule().strokeBorder(AppColors.destructive.dark, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
@@ -105,20 +105,26 @@ struct SmallDestructiveButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .pillBox(.small)
-            .foregroundStyle(AppColors.destructiveText)
-            .background(Capsule().strokeBorder(AppColors.destructiveDeep, lineWidth: 1))
+            .foregroundStyle(AppColors.destructive.light)
+            .background(Capsule().strokeBorder(AppColors.destructive.dark, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
 
-/// Round, icon-only tap target with a subtle glass fill.
+/// Round, icon-only tap target, raised off the screen like a card.
+///
+/// Opaque rather than a translucent wash: the button has a single call site and
+/// sits only on `background`, so there is no varying backdrop for an alpha to
+/// adapt to — the one thing alpha buys. That makes it the same press pair
+/// `ProjectCard` uses, and keeps the control on ramp steps instead of the
+/// hairline tokens it used to borrow.
 struct IconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(AppColors.textMuted)
             .frame(width: 44, height: 44)
             .background(
-                Circle().fill(Color.white.opacity(configuration.isPressed ? 0.14 : 0.07))
+                Circle().fill(configuration.isPressed ? AppColors.surfaceElevated : AppColors.surface)
             )
     }
 }
@@ -141,7 +147,7 @@ struct AppMenuButton: View {
         Button(role: role, action: action) {
             Label(title, systemImage: systemImage)
         }
-        .tint(role == .destructive ? AppColors.destructive : AppColors.textPrimary)
+        .tint(role == .destructive ? AppColors.destructive.default : AppColors.textPrimary)
     }
 }
 

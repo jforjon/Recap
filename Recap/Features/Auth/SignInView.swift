@@ -25,16 +25,16 @@ struct SignInView: View {
                 }
 
                 VStack(alignment: .leading, spacing: Spacing.s3) {
-                    fieldLabel("EMAIL")
                     AppTextField(
-                        title: "you@studio.co",
+                        label: "Email",
+                        placeholder: "you@studio.co",
                         text: $email,
                         contentType: .emailAddress,
                         keyboardType: .emailAddress
                     )
-                    fieldLabel("PASSWORD")
                     AppSecureField(
-                        title: "Password",
+                        label: "Password",
+                        placeholder: "At least 8 characters",
                         text: $password,
                         contentType: .password
                     )
@@ -45,7 +45,7 @@ struct SignInView: View {
                             Text(errorMessage)
                         }
                         .appTextStyle(.small)
-                        .foregroundStyle(AppColors.destructiveText)
+                        .foregroundStyle(AppColors.destructive.light)
                     }
                 }
 
@@ -84,12 +84,6 @@ struct SignInView: View {
         }
         .frame(width: 46, alignment: .leading)
         .padding(.bottom, Spacing.s1)
-    }
-
-    private func fieldLabel(_ text: String) -> some View {
-        Text(text)
-            .appTextStyle(.mono)
-            .foregroundStyle(AppColors.textTertiary)
     }
 
     private func submit(signUp: Bool) {

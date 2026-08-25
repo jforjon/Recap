@@ -280,7 +280,10 @@ struct NoteDetailView: View {
             }
 
             if isEditingSpeakerContext {
-                AppTextArea(title: "Speaker, role, event context…", text: $speakerContextDraft)
+                // Unlabelled on purpose: the section header above already names this,
+                // and carries the Add/Edit control.
+                AppTextArea(placeholder: "Speaker, role, event context…",
+                            text: $speakerContextDraft)
                 HStack(spacing: Spacing.s5) {
                     Spacer()
                     Button("Cancel") {

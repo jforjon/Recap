@@ -67,7 +67,7 @@ struct PersonalNotesContent: View {
                         } label: {
                             Label("Delete", systemImage: "trash")
                         }
-                        .tint(AppColors.destructive)
+                        .tint(AppColors.destructive.default)
                     }
                 }
             }
@@ -118,7 +118,10 @@ struct PersonalNotesContent: View {
             )
         } else {
             HStack {
-                AppTextField(title: isTranscribingVoice ? "Transcribing…" : "Write a note…", text: $draft)
+                // Unlabelled on purpose: inline composer, sharing its row with the
+                // mic and send buttons.
+                AppTextField(placeholder: isTranscribingVoice ? "Transcribing…" : "Write a note…",
+                             text: $draft)
                     .disabled(isTranscribingVoice)
 
                 if draft.trimmingCharacters(in: .whitespaces).isEmpty {

@@ -13,6 +13,18 @@ extension Color {
     }
 }
 
+/// One semantic status family: three shades of a single hue, named by the job
+/// each does rather than by position on a ladder. Unlike `neutral*` / `blue*`
+/// these do not interpolate — there is no meaningful value between two of them.
+struct StatusColors {
+    /// Foreground on dark — text, icons, glyphs.
+    let light: Color
+    /// The signature fill — dots, tints, filled controls.
+    let `default`: Color
+    /// Opaque border or tint background, quiet against charcoal.
+    let dark: Color
+}
+
 /// Design tokens for the "recap — iOS dark UI" system: soft-charcoal surfaces, a
 /// sapphire accent, and a cool-neutral text ramp. Dark-mode only (the app pins
 /// `.preferredColorScheme(.dark)`), so tokens are single values rather than
@@ -115,11 +127,6 @@ enum AppColors {
     static let textFaint     = neutral500
     static let textDisabled  = neutral600
 
-    // MARK: - Destructive (3 reds)
-    static let destructiveText = Color(hex: "FF6961") // light — text / icons
-    static let destructive     = Color(hex: "FF453A") // base — fills / dots / tints
-    static let destructiveDeep = Color(hex: "6F2F2E") // dark — borders / tint bg (opaque)
-
     // MARK: - Category accents
     static let categoryTalk     = Color(hex: "E9B44C") // gold
     static let categoryTraining = Color(hex: "E97C5E") // coral
@@ -136,12 +143,57 @@ enum AppColors {
     static let chipBackground = chipFill
     static let chipBorder     = chipStroke
 
-    // MARK: - Status
-    static let success500 = Color(hex: "5FE3BE")
+    // MARK: - Status (semantic families)
+    //
+    // Four hues, three shades each, split by role rather than by position —
+    // these are not a ramp and don't interpolate. The split is the one the
+    // destructive reds already used, generalised:
+    //
+    //   light    foreground on dark — text, icons, glyphs
+    //   default  the signature fill — dots, tints, filled controls
+    //   dark     opaque border / tint background, quiet on charcoal
+    //
+    // The families sit at different lightnesses because their hues peak at
+    // different lightnesses: red tops out at L 63, amber at L 77. Forcing them
+    // onto one lightness would mean either a washed red or a mustard warning —
+    // the gamut is the constraint, not a preference.
+    //
+    // Green and blue are the exception, and deliberately so. Both peak far too
+    // light to use there (green at L 89, blue-cyan at L 80), which reads as
+    // highlighter rather than status, so `success` and `info` are capped at
+    // L 66 and L 64 and take a richer, deeper colour instead of a brighter one.
+    //
+    // `light` and `dark` are derived from each `default` by the transform the
+    // shipping destructive trio already described (L +4.4 / chroma ×0.83, and
+    // L 39.4 absolute / chroma ×0.41), clamped into sRGB. The destructive
+    // values below are the originals, kept exactly.
+    static let destructive = StatusColors(
+        light:   Color(hex: "FF6961"),
+        default: Color(hex: "FF453A"),
+        dark:    Color(hex: "6F2F2E")
+    )
     /// The app's former brand amber, now purely semantic — a warning must not
     /// read as the accent, and with the accent gone blue it no longer can.
-    static let warning500 = Color(hex: "F0A24A")
-    static let error500   = destructive
+    static let warning = StatusColors(
+        light:   Color(hex: "F6B470"),
+        default: Color(hex: "F0A24A"),
+        dark:    Color(hex: "5B4023")
+    )
+    static let success = StatusColors(
+        light:   Color(hex: "57B770"),
+        default: Color(hex: "28AD57"),
+        dark:    Color(hex: "285032")
+    )
+    /// Ocean blue at H 235. Info wants to be blue and blue is already the brand,
+    /// so the separation from the sapphire accent is carried by lightness and
+    /// chroma as much as by the 32° of hue: `info.default` is 12 L points
+    /// lighter and far less chromatic than `accent`. The pair to watch is
+    /// `info.light` against `accentGraphic` — both mid-light blues, 32° apart.
+    static let info = StatusColors(
+        light:   Color(hex: "51A4D0"),
+        default: Color(hex: "2597CD"),
+        dark:    Color(hex: "294B5E")
+    )
 }
 
 /// `Color.recap*` token accessors, sourced from `AppColors` so there's a single

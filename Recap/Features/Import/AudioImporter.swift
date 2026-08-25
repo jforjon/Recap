@@ -118,7 +118,7 @@ struct ImportProgressRow: View {
             if let failure = progress.failure {
                 Text(failure)
                     .appTextStyle(.small)
-                    .foregroundStyle(AppColors.destructiveText)
+                    .foregroundStyle(AppColors.destructive.light)
             } else {
                 ProgressView(value: progress.fraction)
                     .tint(AppColors.accentGraphic)

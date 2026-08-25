@@ -20,7 +20,34 @@ struct AppCard<Content: View>: View {
     }
 }
 
-/// Selectable filter pill (e.g. All / Projects / Recordings). Active = amber fill.
+/// The selectable pill, defined once.
+///
+/// Filtering a list and navigating between sections are different jobs, but the
+/// app has always drawn them as the same pill. The look therefore lives here
+/// rather than being spelled out in both `FilterChip` and `SegmentedChipBar`,
+/// where it had already drifted apart — 14/7 padding against 12/8, which is the
+/// kind of difference nobody notices until the two sit on one screen.
+struct ChipPill: View {
+    let title: String
+    let isSelected: Bool
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(isSelected ? AppColors.accentText : AppColors.textSecondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(isSelected ? AppColors.accent : AppColors.chipFill)
+            .overlay(
+                Capsule().strokeBorder(isSelected ? Color.clear : AppColors.chipStroke, lineWidth: 1)
+            )
+            .clipShape(Capsule())
+    }
+}
+
+/// Selectable filter pill (e.g. All / Projects / Recordings) — narrows what a
+/// list shows. For switching between sections of a screen use
+/// `SegmentedChipBar`, which draws the same pill.
 struct FilterChip: View {
     let title: String
     let isActive: Bool
@@ -28,16 +55,7 @@ struct FilterChip: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(isActive ? AppColors.accentText : AppColors.textSecondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(isActive ? AppColors.accent : AppColors.chipFill)
-                .overlay(
-                    Capsule().strokeBorder(isActive ? Color.clear : AppColors.chipStroke, lineWidth: 1)
-                )
-                .clipShape(Capsule())
+            ChipPill(title: title, isSelected: isActive)
         }
         .buttonStyle(.plain)
     }

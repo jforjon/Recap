@@ -37,7 +37,7 @@ struct SyncedTranscriptView: View {
                 if let message = player.errorMessage {
                     Text(message)
                         .appTextStyle(.small)
-                        .foregroundStyle(AppColors.destructiveText)
+                        .foregroundStyle(AppColors.destructive.light)
                 }
 
                 Text("TRANSCRIPT")
@@ -102,7 +102,7 @@ struct SyncedTranscriptView: View {
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 17))
-                        .foregroundStyle(AppColors.destructiveText)
+                        .foregroundStyle(AppColors.destructive.light)
                         .frame(width: 40, height: 44)
                 }
                 .buttonStyle(.plain)

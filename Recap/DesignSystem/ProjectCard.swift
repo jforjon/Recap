@@ -46,7 +46,7 @@ struct ProjectCard: View {
     @Environment(\.projectCardPressed) private var isPressed
 
     private let tileSize: CGFloat = 42
-    private let containerRadius: CGFloat = 20
+    private let containerRadius: CGFloat = Radius.card
 
     var body: some View {
         HStack(spacing: 12) {
@@ -81,10 +81,10 @@ struct ProjectCard: View {
     }
 
     private var iconTile: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: Radius.input, style: .continuous)
             .fill(isSelected ? Color.recapAccent.opacity(0.14) : AppColors.chipFill)
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: Radius.input, style: .continuous)
                     .strokeBorder(
                         isSelected ? Color.recapAccent.opacity(0.28) : AppColors.chipStroke,
                         lineWidth: 1
@@ -105,46 +105,10 @@ struct ProjectCard: View {
     }
 }
 
-// MARK: - New project (creation) row
-
-/// Dashed "New project" row matching `ProjectCard`'s geometry.
-struct NewProjectCard: View {
-    private let tileSize: CGFloat = 42
-    private let containerRadius: CGFloat = 20
-
-    var body: some View {
-        HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4]))
-                .frame(width: tileSize, height: tileSize)
-                .overlay(
-                    Image(systemName: "plus")
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(AppColors.textTertiary)
-                )
-
-            Text("New project")
-                .font(.system(.callout, design: .default).weight(.regular))
-                .foregroundStyle(AppColors.textTertiary)
-
-            Spacer(minLength: 0)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .overlay(
-            RoundedRectangle(cornerRadius: containerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4]))
-        )
-        .clipShape(RoundedRectangle(cornerRadius: containerRadius, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: containerRadius, style: .continuous))
-    }
-}
-
 #Preview("Project cards") {
     VStack(spacing: 10) {
         ProjectCard(name: "Onboarding research", recordingCount: 3, noteCount: 7, isSelected: true)
         ProjectCard(name: "Summit 2026 — a very long project name that truncates", recordingCount: 1, noteCount: 1)
-        NewProjectCard()
     }
     .padding(16)
     .frame(maxWidth: 420)

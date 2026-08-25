@@ -99,7 +99,7 @@ struct LibraryContentView: View {
                             } label: {
                                 Label("Delete project", systemImage: "trash")
                             }
-                            .tint(AppColors.destructive)
+                            .tint(AppColors.destructive.default)
                         }
                     }
                 }
@@ -121,7 +121,7 @@ struct LibraryContentView: View {
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
-                            .tint(AppColors.destructive)
+                            .tint(AppColors.destructive.default)
                         }
                     }
                 }
@@ -261,17 +261,9 @@ struct LibraryContentView: View {
 
     private func noteRow(_ note: Note, hit: LibrarySearch.NoteHit) -> some View {
         AppCard {
-            HStack {
-                if let category = note.category {
-                    AppChip(text: category.displayText, dotColor: category.dotColor)
-                } else {
-                    AppChip(text: "Note")
-                }
-                Spacer()
-                Text(formatShortDate(note.createdAt))
-                    .appTextStyle(.mono)
-                    .foregroundStyle(AppColors.textTertiary)
-            }
+            Text(formatShortDate(note.createdAt))
+                .appTextStyle(.mono)
+                .foregroundStyle(AppColors.textTertiary)
             Text(note.title)
                 .appTextStyle(.bodyMedium)
                 .foregroundStyle(AppColors.textPrimary)
@@ -460,10 +452,7 @@ private struct NewProjectSheet: View {
 
     private var nameStep: some View {
         VStack(alignment: .leading, spacing: Spacing.s4) {
-            Text("PROJECT NAME")
-                .appTextStyle(.label)
-                .foregroundStyle(AppColors.textSecondary)
-            AppTextField(title: "e.g. Summit 2026", text: $name)
+            AppTextField(label: "Project name", placeholder: "e.g. Summit 2026", text: $name)
             Spacer()
             Button(isBusy ? "Creating…" : "Create project") {
                 Task { await create() }
@@ -535,11 +524,9 @@ private struct NewProjectSheet: View {
         let isSelected = selected.contains(note.id)
         return VStack(alignment: .leading, spacing: Spacing.s2) {
             HStack {
-                if let category = note.category {
-                    AppChip(text: category.displayText, dotColor: category.dotColor)
-                } else {
-                    AppChip(text: "Note")
-                }
+                Text(formatShortDate(note.createdAt))
+                    .appTextStyle(.mono)
+                    .foregroundStyle(AppColors.textTertiary)
                 Spacer()
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))

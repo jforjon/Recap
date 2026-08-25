@@ -231,23 +231,24 @@ struct ProjectDetailView: View {
                     Button {
                         nav.detailSelection = .note(note.id)
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            if let category = note.category {
-                                AppChip(text: category.displayText, dotColor: category.dotColor)
-                            }
+                        AppCard {
+                            Text(formatShortDate(note.createdAt))
+                                .appTextStyle(.mono)
+                                .foregroundStyle(AppColors.textTertiary)
                             Text(note.title)
                                 .appTextStyle(.bodyMedium)
                                 .foregroundStyle(AppColors.textPrimary)
                         }
                     }
                     .buttonStyle(.plain)
+                    .recapCardRow()
                     .swipeActions(edge: .trailing) {
                         Button {
                             Task { await removeFromProject(note.id) }
                         } label: {
                             Label("Remove", systemImage: "minus.circle")
                         }
-                        .tint(AppColors.warning500)
+                        .tint(AppColors.warning.default)
                     }
                 }
             }

@@ -138,7 +138,7 @@ private struct RecordingIndicatorDot: View {
 
     var body: some View {
         Circle()
-            .fill(AppColors.destructive)
+            .fill(AppColors.destructive.default)
             .frame(width: 8, height: 8)
             .opacity(isDim ? 0.3 : 1)
             .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true),
