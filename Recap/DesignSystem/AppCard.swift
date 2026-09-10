@@ -33,7 +33,7 @@ struct ChipPill: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 14, weight: .semibold))
+            .appTextStyle(.smallMedium)
             .foregroundStyle(isSelected ? AppColors.accentText : AppColors.textSecondary)
             .padding(.horizontal, 14)
             .padding(.vertical, 7)
@@ -56,6 +56,7 @@ struct FilterChip: View {
     var body: some View {
         Button(action: action) {
             ChipPill(title: title, isSelected: isActive)
+                .tapTargetPadding()
         }
         .buttonStyle(.plain)
     }

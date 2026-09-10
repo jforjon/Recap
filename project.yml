@@ -27,10 +27,13 @@ targets:
         UIAppFonts:
           - DMSans-Regular.ttf
           - DMSans-Medium.ttf
+          - DMSans-Bold.ttf
           - RobotoMono-Regular.ttf
           - RobotoMono-Medium.ttf
         SUPABASE_PROJECT_REF: $(SUPABASE_PROJECT_REF)
         SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
+        FEEDBACK_SCRIPT_ID: $(FEEDBACK_SCRIPT_ID)
+        FEEDBACK_SECRET: $(FEEDBACK_SECRET)
     # iCloud storage for saved audio. DISABLED until enrolment in the Apple
     # Developer Program completes — a free personal team cannot sign iCloud
     # entitlements, and leaving this in place breaks device builds outright.

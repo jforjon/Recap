@@ -274,7 +274,7 @@ struct NoteDetailView: View {
                         speakerContextDraft = context
                         isEditingSpeakerContext = true
                     }
-                    .font(.system(size: 13, weight: .semibold))
+                    .appTextStyle(.smallMedium)
                     .foregroundStyle(AppColors.accentGraphic)
                 }
             }
@@ -290,7 +290,7 @@ struct NoteDetailView: View {
                         speakerContextDraft = context
                         isEditingSpeakerContext = false
                     }
-                    .font(.system(size: 15, weight: .medium))
+                    .appTextStyle(.smallMedium)
                     .foregroundStyle(AppColors.textSecondary)
 
                     Button(isSavingSpeakerContext ? "Saving…" : "Save") {

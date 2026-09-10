@@ -116,11 +116,30 @@ enum AudioFileTranscriber {
         for transcriber: SpeechTranscriber,
         locale: Locale
     ) async throws {
-        _ = try? await AssetInventory.reserve(locale: locale)
+        let wanted = locale.identifier(.bcp47)
+        let name = SpokenLanguageStore.displayName(wanted)
+
+        // Already installed: the reservation only keeps it that way, so failing
+        // to renew it is no reason to refuse the import.
         let installed = await SpeechTranscriber.installedLocales.map { $0.identifier(.bcp47) }
-        if installed.contains(locale.identifier(.bcp47)) { return }
-        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            try await request.downloadAndInstall()
+        if installed.contains(wanted) {
+            _ = try? await AssetInventory.reserve(locale: locale)
+            return
         }
+
+        do {
+            _ = try await AssetInventory.reserve(locale: locale)
+        } catch {
+            throw TranscribeError(
+                message: "\(name) couldn't be reserved for on-device transcription. You may have reserved as many languages as iOS allows — remove one under Spoken languages in Settings and try again."
+            )
+        }
+
+        guard let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else {
+            throw TranscribeError(
+                message: "The on-device model for \(name) isn't available to download right now. Check your connection and try again."
+            )
+        }
+        try await request.downloadAndInstall()
     }
 }

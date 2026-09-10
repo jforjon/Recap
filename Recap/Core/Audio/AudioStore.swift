@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Where a recording's audio is kept, if at all.
 ///
@@ -26,6 +27,28 @@ enum AudioStorageLocation: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// The saved-audio setting as observable state, so turning it on in Settings
+/// reaches the note detail's player and the recorder without a relaunch.
+/// `AudioStore.location` reads and writes through this.
+@Observable
+final class AudioSettings {
+    static let shared = AudioSettings()
+
+    private static let locationKey = "audio.storageLocation"
+
+    private(set) var location: AudioStorageLocation
+
+    private init() {
+        let raw = UserDefaults.standard.string(forKey: Self.locationKey) ?? ""
+        location = AudioStorageLocation(rawValue: raw) ?? .off
+    }
+
+    func setLocation(_ newValue: AudioStorageLocation) {
+        location = newValue
+        UserDefaults.standard.set(newValue.rawValue, forKey: Self.locationKey)
+    }
+}
+
 /// Owns the audio files: where they live, moving them when the user changes their
 /// mind, and getting them back out of iCloud when the system has evicted them.
 ///
@@ -33,7 +56,6 @@ enum AudioStorageLocation: String, CaseIterable, Identifiable, Sendable {
 /// id; once the note reaches Supabase it is renamed to the server id, which is
 /// what every screen afterwards looks it up by.
 enum AudioStore {
-    private static let locationKey = "audio.storageLocation"
     private static let folderName = "Audio"
 
     struct AudioError: LocalizedError {
@@ -44,11 +66,8 @@ enum AudioStore {
     // MARK: - Setting
 
     static var location: AudioStorageLocation {
-        get {
-            guard let raw = UserDefaults.standard.string(forKey: locationKey) else { return .off }
-            return AudioStorageLocation(rawValue: raw) ?? .off
-        }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: locationKey) }
+        get { AudioSettings.shared.location }
+        set { AudioSettings.shared.setLocation(newValue) }
     }
 
     static var isEnabled: Bool { location != .off }
@@ -175,6 +194,31 @@ enum AudioStore {
 
     static func formattedTotal() -> String {
         ByteCountFormatter.string(fromByteCount: totalBytes(), countStyle: .file)
+    }
+
+    /// How many recordings have audio saved, across both directories.
+    static func savedCount() -> Int {
+        savedFiles().count
+    }
+
+    /// Deletes every saved audio file and nothing else. Transcripts, notes and
+    /// summaries live in the database and are not touched — the user asked to
+    /// reclaim the space, not to lose the recordings.
+    static func deleteAll() {
+        for file in savedFiles() {
+            try? FileManager.default.removeItem(at: file)
+        }
+    }
+
+    private static func savedFiles() -> [URL] {
+        [localDirectory(), cloudDirectory()]
+            .compactMap { $0 }
+            .flatMap { directory in
+                ((try? FileManager.default.contentsOfDirectory(
+                    at: directory,
+                    includingPropertiesForKeys: nil
+                )) ?? []).filter { $0.pathExtension == "m4a" }
+            }
     }
 
     /// Moves every saved recording to the newly chosen location. Files that fail

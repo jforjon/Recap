@@ -1,529 +1,140 @@
 import SwiftUI
 
+/// Settings, level one.
+///
+/// Purely navigational: five rows across four named groups, each showing its
+/// current value on the right, each pushing a screen that owns its own state.
+/// Nothing here is edited in place.
+///
+/// That is the whole point of the rebuild. The screen this replaced kept a
+/// single `editing` enum shared by three sections, so opening one editor
+/// silently disabled the other two, and a value could only be read by entering
+/// edit mode. With every editable thing behind its own push there is no shared
+/// mode left to leak.
 struct SettingsView: View {
     let authManager: AuthManager
 
-    /// Which section, if any, is currently in edit mode. Only one at a time so
-    /// the page always reads as "view" with a single focused editor.
-    private enum EditingSection {
-        case account, languages, apiKey
-    }
-
-    @State private var editing: EditingSection?
-
-    // Account
     @State private var email = ""
-    @State private var emailDraft = ""
-    @State private var newPassword = ""
-    @State private var confirmPassword = ""
-    @State private var isSavingAccount = false
-    @State private var accountError: String?
-    @State private var accountSavedMessage: String?
-
-    // Anthropic API key. Only ever tracked as present/absent — the secret itself
-    // stays in the Keychain and is never pulled into view state.
     @State private var hasAnthropicKey = false
-    @State private var keyDraft = ""
-    @State private var isSavingKey = false
-    @State private var keyError: String?
-    @State private var keySavedMessage: String?
 
-    // Spoken languages
-    @State private var supportedLanguages: [Locale] = []
-    @State private var selectedLanguages: [String] = []
-    @State private var defaultLanguage = ""
-
-    // Audio storage
-    @State private var audioLocation: AudioStorageLocation = .off
-    @State private var audioUsage = ""
-    @State private var isMigratingAudio = false
-
-    @State private var errorMessage: String?
+    // Both stores are observable, so a change made two screens down redraws
+    // these rows on the way back without any callback plumbing.
+    private var languages: SpokenLanguageStore { SpokenLanguageStore.shared }
+    private var audio: AudioSettings { AudioSettings.shared }
 
     var body: some View {
-        Form {
-            accountSection
-            spokenLanguagesSection
-            audioSection
-            apiKeySection
-
-            // Trailing action, not a settings row — sits on the page background
-            // with no section fill behind it.
-            Section {
-                Button("Sign out", role: .destructive) {
-                    Task { try? await authManager.signOut() }
-                }
-                .buttonStyle(.appSecondary)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: Spacing.s4, leading: Spacing.s4,
-                                          bottom: 0, trailing: Spacing.s4))
-            }
-        }
-        .recapBackground()
-        .navigationTitle("Settings")
-        .task { await load() }
-        .alert("Error", isPresented: .constant(errorMessage != nil)) {
-            Button("OK") { errorMessage = nil }
-        } message: {
-            Text(errorMessage ?? "")
-        }
-    }
-
-    // MARK: - Account
-
-    @ViewBuilder
-    private var accountSection: some View {
-        Section {
-            if editing == .account {
-                VStack(alignment: .leading, spacing: Spacing.s4) {
-                    AppTextField(label: "Email", placeholder: "you@example.com",
-                                 text: $emailDraft,
-                                 contentType: .emailAddress, keyboardType: .emailAddress)
-
-                    AppSecureField(label: "New password",
-                                   placeholder: "Leave blank to keep current",
-                                   text: $newPassword, contentType: .newPassword)
-                    AppSecureField(label: "Confirm password",
-                                   placeholder: "Re-enter your new password",
-                                   text: $confirmPassword, contentType: .newPassword)
-
-                    if let accountError {
-                        Text(accountError)
-                            .appTextStyle(.small)
-                            .foregroundStyle(AppColors.destructive.light)
-                    }
-
-                    editorButtons(
-                        isSaving: isSavingAccount,
-                        save: { Task { await saveAccount() } },
-                        cancel: cancelAccountEdit
-                    )
-                }
+        SettingsScreen(topPadding: 0) {
+            Text("Settings")
+                .appTextStyle(.displayBold)
+                .foregroundStyle(AppColors.textPrimary)
                 .padding(.vertical, Spacing.s1)
-            } else {
-                readOnlyRow(label: "Email", value: email.isEmpty ? "—" : email)
-                readOnlyRow(label: "Password", value: "••••••••")
-                savedNote(accountSavedMessage)
-            }
-        } header: {
-            sectionHeader("Account", section: .account) { beginAccountEdit() }
+
+            captureGroup
+            intelligenceGroup
+            supportGroup
+            accountGroup
+
+            Text(Self.versionString)
+                .appTextStyle(.mono)
+                .foregroundStyle(AppColors.textFaint)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.top, Spacing.s2)
         }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
     }
 
-    private func beginAccountEdit() {
-        emailDraft = email
-        newPassword = ""
-        confirmPassword = ""
-        accountError = nil
-        accountSavedMessage = nil
-        editing = .account
-    }
+    // MARK: - Groups
 
-    private func cancelAccountEdit() {
-        editing = nil
-        emailDraft = ""
-        newPassword = ""
-        confirmPassword = ""
-        accountError = nil
-    }
-
-    private func saveAccount() async {
-        accountError = nil
-
-        let trimmedEmail = emailDraft.trimmingCharacters(in: .whitespaces)
-        let emailChanged = !trimmedEmail.isEmpty && trimmedEmail != email
-        let wantsPasswordChange = !newPassword.isEmpty || !confirmPassword.isEmpty
-
-        guard !trimmedEmail.isEmpty else {
-            accountError = "Email can't be empty."
-            return
-        }
-        if wantsPasswordChange {
-            guard newPassword.count >= 6 else {
-                accountError = "Password must be at least 6 characters."
-                return
-            }
-            guard newPassword == confirmPassword else {
-                accountError = "Passwords don't match."
-                return
-            }
-        }
-        guard emailChanged || wantsPasswordChange else {
-            cancelAccountEdit()
-            return
-        }
-
-        isSavingAccount = true
-        defer { isSavingAccount = false }
-        do {
-            if wantsPasswordChange {
-                try await authManager.updatePassword(newPassword)
-            }
-            if emailChanged {
-                try await authManager.updateEmail(trimmedEmail)
-            }
-
-            var notes: [String] = []
-            if wantsPasswordChange { notes.append("Password updated") }
-            // Supabase only applies the new address after the user clicks the
-            // confirmation link, so don't overwrite the displayed email yet.
-            if emailChanged { notes.append("Check \(trimmedEmail) to confirm your new address") }
-            accountSavedMessage = notes.joined(separator: " · ")
-
-            editing = nil
-            newPassword = ""
-            confirmPassword = ""
-        } catch {
-            if error.isCancellation { return }
-            accountError = error.localizedDescription
-        }
-    }
-
-    // MARK: - Spoken languages
-
-    @ViewBuilder
-    private var spokenLanguagesSection: some View {
-        // Only render when the device actually supports on-device transcription and
-        // reports installable languages — otherwise there's nothing to list.
-        if !supportedLanguages.isEmpty {
-            Section {
-                if editing == .languages {
-                    Text("Add the languages you record in. The default shows next to Record. Leave empty to just use your device language.")
-                        .appTextStyle(.small)
-                        .foregroundStyle(AppColors.textTertiary)
-
-                    ForEach(supportedLanguages, id: \.identifier) { locale in
-                        let code = locale.identifier(.bcp47)
-                        Button {
-                            toggleLanguage(code)
-                        } label: {
-                            HStack {
-                                Text(displayName(code))
-                                    .foregroundStyle(AppColors.textPrimary)
-                                Spacer()
-                                if selectedLanguages.contains(code) {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(AppColors.categoryPanel)
-                                }
-                            }
-                        }
-                    }
-
-                    if !selectedLanguages.isEmpty {
-                        Picker("Default", selection: $defaultLanguage) {
-                            ForEach(selectedLanguages, id: \.self) { code in
-                                Text(displayName(code)).tag(code)
-                            }
-                        }
-                        .onChange(of: defaultLanguage) { _, newValue in
-                            SpokenLanguageStore.defaultLanguage = newValue.isEmpty ? nil : newValue
-                        }
-                    }
-
-                    Button("Done") { editing = nil }
-                        .buttonStyle(.appSecondarySmall)
-                } else if selectedLanguages.isEmpty {
-                    Text("Using your device language")
-                        .appTextStyle(.body)
-                        .foregroundStyle(AppColors.textTertiary)
-                } else {
-                    ForEach(selectedLanguages, id: \.self) { code in
-                        HStack {
-                            Text(displayName(code))
-                                .appTextStyle(.body)
-                                .foregroundStyle(AppColors.textPrimary)
-                            Spacer()
-                            if code == defaultLanguage {
-                                Text("DEFAULT")
-                                    .appTextStyle(.label)
-                                    .foregroundStyle(AppColors.accentGraphic)
-                            }
-                        }
-                    }
+    private var captureGroup: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            SettingsGroupLabel(title: "Capture")
+            SettingsCard {
+                SettingsLinkRow(title: "Spoken languages", value: languageSummary) {
+                    SpokenLanguagesView()
                 }
-            } header: {
-                sectionHeader("Spoken languages", section: .languages) { editing = .languages }
+                SettingsDivider()
+                SettingsLinkRow(title: "Save audio", value: audio.location.title) {
+                    AudioStorageView()
+                }
             }
         }
     }
 
-    private func toggleLanguage(_ code: String) {
-        SpokenLanguageStore.toggle(code)
-        selectedLanguages = SpokenLanguageStore.selected
-        defaultLanguage = SpokenLanguageStore.defaultLanguage ?? ""
-    }
-
-    private func displayName(_ code: String) -> String {
-        Locale.current.localizedString(forIdentifier: code) ?? code
-    }
-
-    // MARK: - Audio
-
-    @ViewBuilder
-    private var audioSection: some View {
-        Section {
-            ForEach(AudioStorageLocation.allCases) { option in
-                Button {
-                    Task { await changeAudioLocation(to: option) }
+    private var intelligenceGroup: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            SettingsGroupLabel(title: "Intelligence")
+            SettingsCard {
+                NavigationLink {
+                    APIKeyView(hasKey: $hasAnthropicKey)
                 } label: {
-                    HStack(alignment: .top, spacing: Spacing.s3) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(option.title)
+                    SettingsRow(title: "Anthropic API key", showsChevron: true) {
+                        HStack(spacing: 7) {
+                            Circle()
+                                .fill(hasAnthropicKey ? AppColors.success.default : AppColors.textDisabled)
+                                .frame(width: 7, height: 7)
+                            Text(hasAnthropicKey ? "Set" : "Not set")
                                 .appTextStyle(.body)
-                                .foregroundStyle(AppColors.textPrimary)
-                            Text(option.detail)
-                                .appTextStyle(.small)
                                 .foregroundStyle(AppColors.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            // Choosing iCloud when it isn't set up would silently
-                            // behave like "on this iPhone", so say so up front.
-                            if option == .cloud && !AudioStore.isCloudAvailable {
-                                Text("iCloud Drive is off or you're not signed in — recordings will stay on this iPhone.")
-                                    .appTextStyle(.small)
-                                    .foregroundStyle(AppColors.warning.default)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        Spacer(minLength: 0)
-                        if audioLocation == option {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(AppColors.accentGraphic)
                         }
                     }
-                    .padding(.vertical, Spacing.s1)
-                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(isMigratingAudio)
             }
-
-            if isMigratingAudio {
-                HStack(spacing: Spacing.s2) {
-                    ProgressView()
-                    Text("Moving recordings…")
-                        .appTextStyle(.small)
-                        .foregroundStyle(AppColors.textSecondary)
-                }
-            } else if audioLocation != .off {
-                readOnlyRow(label: "Audio stored", value: audioUsage)
-            }
-        } header: {
-            Text("Save audio")
-        } footer: {
-            Text("With this off, only the transcript is kept and nothing is ever written to disk — the way recap has always worked. Turning it on lets you play a recording back with the transcript following along. Roughly 15 MB per hour.")
-                .appTextStyle(.small)
-                .foregroundStyle(AppColors.textSecondary)
+            SettingsHelp("Summaries use your own Anthropic account.")
         }
     }
 
-    private func changeAudioLocation(to option: AudioStorageLocation) async {
-        guard option != audioLocation else { return }
-        let previous = audioLocation
-        audioLocation = option
-        AudioStore.location = option
-
-        // Switching between phone and iCloud moves what's already saved. Turning
-        // saving off leaves existing recordings alone — the user asked to stop
-        // keeping new audio, not to throw away what they have.
-        let movingBetweenStores = option != .off && previous != .off
-        let turningOn = option != .off && previous == .off
-        if movingBetweenStores || turningOn {
-            isMigratingAudio = true
-            await AudioStore.migrateAll(to: option)
-            isMigratingAudio = false
-        }
-        audioUsage = AudioStore.formattedTotal()
-    }
-
-    // MARK: - Anthropic API key
-
-    @ViewBuilder
-    private var apiKeySection: some View {
-        Section {
-            if editing == .apiKey {
-                VStack(alignment: .leading, spacing: Spacing.s4) {
-                    AppSecureField(label: "Anthropic API key",
-                                   placeholder: "sk-ant-…", text: $keyDraft)
-
-                    if let keyError {
-                        Text(keyError)
-                            .appTextStyle(.small)
-                            .foregroundStyle(AppColors.destructive.light)
-                    }
-
-                    editorButtons(
-                        isSaving: isSavingKey,
-                        save: { Task { await saveKey() } },
-                        cancel: cancelKeyEdit
-                    )
-                }
-                .padding(.vertical, Spacing.s1)
-            } else {
-                // Present/absent only. There is no "reveal" affordance and no
-                // masked stand-in for a real value: the app cannot read the key
-                // back out for display, by design.
-                Text(hasAnthropicKey ? "Set" : "Not set")
-                    .appTextStyle(.body)
-                    .foregroundStyle(hasAnthropicKey ? AppColors.textPrimary : AppColors.textTertiary)
-                savedNote(keySavedMessage)
-
-                if hasAnthropicKey {
-                    Button("Remove key", role: .destructive) {
-                        Task { await removeKey() }
-                    }
-                    .buttonStyle(.appSecondarySmall)
+    private var supportGroup: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            SettingsGroupLabel(title: "Support")
+            SettingsCard {
+                SettingsLinkRow(title: "Send feedback") {
+                    FeedbackView()
                 }
             }
-        } header: {
-            sectionHeader("Anthropic API key",
-                          section: .apiKey,
-                          editTitle: hasAnthropicKey ? "Replace" : "Add") { beginKeyEdit() }
-        } footer: {
-            Text("Stored only on this device — never uploaded to recap's servers, and not included in backups or iCloud. Summaries run on your own Anthropic account instead of recap credits.")
-                .appTextStyle(.small)
-                .foregroundStyle(AppColors.textSecondary)
         }
     }
 
-    private func beginKeyEdit() {
-        // Never prefill with the stored key — replacing means pasting a fresh one.
-        keyDraft = ""
-        keyError = nil
-        keySavedMessage = nil
-        editing = .apiKey
-    }
-
-    private func cancelKeyEdit() {
-        editing = nil
-        keyDraft = ""
-        keyError = nil
-    }
-
-    private func saveKey() async {
-        isSavingKey = true
-        keyError = nil
-        keySavedMessage = nil
-        defer { isSavingKey = false }
-        do {
-            try await AnthropicKeyStore.save(keyDraft)
-            keyDraft = ""
-            hasAnthropicKey = true
-            editing = nil
-            keySavedMessage = "Saved to this device"
-        } catch {
-            if error.isCancellation { return }
-            // Inline rather than the page alert: this is nearly always a bad
-            // paste, and the field the user needs to fix is right there.
-            keyError = error.localizedDescription
-        }
-    }
-
-    private func removeKey() async {
-        keySavedMessage = nil
-        do {
-            try await AnthropicKeyStore.clear()
-            hasAnthropicKey = false
-            keySavedMessage = "Removed from this device"
-        } catch {
-            if error.isCancellation { return }
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    // MARK: - Shared pieces
-
-    /// Section title with a trailing Edit affordance. The button hides while any
-    /// section is being edited so only one editor is reachable at a time.
-    @ViewBuilder
-    private func sectionHeader(
-        _ title: String,
-        section: EditingSection,
-        editTitle: String = "Edit",
-        onEdit: @escaping () -> Void
-    ) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            if editing == nil {
-                Button(editTitle, action: onEdit)
-                    .appTextStyle(.small)
-                    .foregroundStyle(AppColors.accentGraphic)
-                    .textCase(nil)
-                    .buttonStyle(.plain)
+    private var accountGroup: some View {
+        VStack(alignment: .leading, spacing: Spacing.s2) {
+            SettingsGroupLabel(title: "Account")
+            SettingsCard {
+                SettingsLinkRow(title: email.isEmpty ? "Account" : email) {
+                    AccountView(authManager: authManager, email: $email)
+                }
             }
         }
     }
 
-    @ViewBuilder
-    private func editorButtons(
-        isSaving: Bool,
-        save: @escaping () -> Void,
-        cancel: @escaping () -> Void
-    ) -> some View {
-        HStack(spacing: Spacing.s3) {
-            Button(isSaving ? "Saving…" : "Save", action: save)
-                .buttonStyle(.appPrimarySmall)
-                .disabled(isSaving)
+    // MARK: - Values
 
-            Button("Cancel", action: cancel)
-                .buttonStyle(.appSecondarySmall)
-                .disabled(isSaving)
+    /// "English (UK) +2" — the default first, then how many more are shortlisted.
+    /// An empty shortlist means every language is on offer next to Record, which
+    /// the row says rather than showing a bare dash.
+    private var languageSummary: String {
+        guard let code = languages.defaultLanguage else { return "Not set" }
+        let name = SpokenLanguageStore.displayName(code)
+        let extras = languages.selected.count - 1
+        guard languages.selected.count > 1 else {
+            return languages.selected.isEmpty ? "\(name) · all offered" : name
         }
+        return "\(name) +\(extras)"
     }
 
-    @ViewBuilder
-    @ViewBuilder
-    private func readOnlyRow(label: String, value: String) -> some View {
-        HStack {
-            Text(label)
-                .appTextStyle(.body)
-                .foregroundStyle(AppColors.textSecondary)
-            Spacer()
-            Text(value)
-                .appTextStyle(.body)
-                .foregroundStyle(AppColors.textPrimary)
-                .multilineTextAlignment(.trailing)
-        }
+    private static var versionString: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "recap \(version) (\(build))"
     }
-
-    @ViewBuilder
-    private func savedNote(_ message: String?) -> some View {
-        if let message {
-            Text(message)
-                .appTextStyle(.small)
-                .foregroundStyle(AppColors.success.default)
-        }
-    }
-
-    // MARK: - Loading
 
     private func load() async {
         if case let .signedIn(_, userEmail) = authManager.state {
             email = userEmail ?? ""
         }
-
-        supportedLanguages = (await LiveTranscriber.supportedLanguages())
-            .sorted { displayName($0.identifier(.bcp47)) < displayName($1.identifier(.bcp47)) }
-        #if targetEnvironment(simulator)
-        // The Simulator ships no on-device speech models, so `supportedLocales`
-        // is empty and this section would be hidden. Show a sample list so the
-        // language UI is visible/testable in the Simulator (recording itself
-        // still needs a real device).
-        if supportedLanguages.isEmpty {
-            supportedLanguages = ["en-US", "fr-FR", "es-ES", "de-DE", "it-IT", "pt-BR", "ja-JP"]
-                .map { Locale(identifier: $0) }
-                .sorted { displayName($0.identifier(.bcp47)) < displayName($1.identifier(.bcp47)) }
-        }
-        #endif
-        selectedLanguages = SpokenLanguageStore.selected
-        defaultLanguage = SpokenLanguageStore.defaultLanguage ?? ""
-
-        audioLocation = AudioStore.location
-        audioUsage = AudioStore.formattedTotal()
-
-        // Presence check only — no network call, and the secret never leaves
-        // the Keychain.
+        await languages.loadAvailable()
         hasAnthropicKey = (try? await AnthropicKeyStore.isSet()) ?? false
     }
 }

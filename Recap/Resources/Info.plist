@@ -20,6 +20,10 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>FEEDBACK_SCRIPT_ID</key>
+	<string>$(FEEDBACK_SCRIPT_ID)</string>
+	<key>FEEDBACK_SECRET</key>
+	<string>$(FEEDBACK_SECRET)</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>recap needs microphone access to record talks and sessions.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -32,6 +36,7 @@
 	<array>
 		<string>DMSans-Regular.ttf</string>
 		<string>DMSans-Medium.ttf</string>
+		<string>DMSans-Bold.ttf</string>
 		<string>RobotoMono-Regular.ttf</string>
 		<string>RobotoMono-Medium.ttf</string>
 	</array>

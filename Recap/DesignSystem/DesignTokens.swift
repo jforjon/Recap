@@ -36,6 +36,24 @@ enum Radius {
 }
 
 extension View {
+    /// Grows a control's tap target without moving anything around it.
+    ///
+    /// Apple's minimum for a touch target is 44×44pt, and several of the app's
+    /// controls are drawn smaller than that on purpose — `ChipPill` is 14pt type
+    /// with 7pt of padding, which DM Sans's 1.302em line box makes 32.2pt tall.
+    /// Growing the pill itself would be the wrong fix: the size is a design
+    /// decision, and every chip row in the app would shift.
+    ///
+    /// So the padding is added, claimed as the hit area, and then removed again
+    /// from the layout. The control draws and lays out exactly as before; only
+    /// the region that responds to a finger is bigger. Must be applied to the
+    /// *label*, inside the Button, so the Button's own shape picks it up.
+    func tapTargetPadding(_ inset: CGFloat = 6) -> some View {
+        padding(inset)
+            .contentShape(Rectangle())
+            .padding(-inset)
+    }
+
     /// Places a scrolling screen (List / Form / ScrollView) on the app's charcoal
     /// background instead of the default grouped system background.
     func recapBackground() -> some View {

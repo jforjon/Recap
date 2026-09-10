@@ -27,6 +27,7 @@ struct SegmentedChipBar<Tab: Hashable & Identifiable>: View {
             withAnimation(.easeInOut(duration: 0.15)) { selection = tab }
         } label: {
             ChipPill(title: title(tab), isSelected: tab == selection)
+                .tapTargetPadding()
         }
         .buttonStyle(.plain)
     }

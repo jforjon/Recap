@@ -2,8 +2,21 @@ import SwiftUI
 
 /// Custom font accessors — bundled DM Sans / Roboto Mono statics registered via UIAppFonts.
 enum AppFont {
-    static func sans(_ size: CGFloat, medium: Bool = false) -> Font {
-        .custom(medium ? "DMSans-Medium" : "DMSans-Regular", size: size)
+    /// DM Sans ships here as three static cuts, all instanced at optical size 14
+    /// from the same variable source — so Regular, Medium and Bold are genuinely
+    /// one family rather than three lookalikes.
+    enum Weight { case regular, medium, bold }
+
+    static func sans(_ size: CGFloat, weight: Weight = .regular) -> Font {
+        switch weight {
+        case .regular: return .custom("DMSans-Regular", size: size)
+        case .medium:  return .custom("DMSans-Medium", size: size)
+        case .bold:    return .custom("DMSans-Bold", size: size)
+        }
+    }
+
+    static func sans(_ size: CGFloat, medium: Bool) -> Font {
+        sans(size, weight: medium ? .medium : .regular)
     }
 
     static func mono(_ size: CGFloat, medium: Bool = false) -> Font {
@@ -18,11 +31,16 @@ struct AppTextStyle {
     let tracking: CGFloat
 
     static let display = AppTextStyle(font: AppFont.sans(32, medium: true), tracking: 32 * -0.04)
+    /// The one place the app shouts: a screen title standing alone at the top.
+    static let displayBold = AppTextStyle(font: AppFont.sans(32, weight: .bold), tracking: 32 * -0.025)
     static let title    = AppTextStyle(font: AppFont.sans(24, medium: true), tracking: 24 * -0.03)
     static let heading  = AppTextStyle(font: AppFont.sans(20, medium: true), tracking: 20 * -0.02)
     static let body     = AppTextStyle(font: AppFont.sans(16), tracking: 16 * -0.01)
     static let bodyMedium = AppTextStyle(font: AppFont.sans(16, medium: true), tracking: 16 * -0.01)
     static let small    = AppTextStyle(font: AppFont.sans(14), tracking: 14 * -0.005)
+    /// `small` at medium weight — chips, and the small text buttons that sit
+    /// beside them. The sans sibling of `monoLarge`.
+    static let smallMedium = AppTextStyle(font: AppFont.sans(14, medium: true), tracking: 14 * -0.005)
     /// Uppercase label — apply `.textCase(.uppercase)` alongside this at the call site.
     static let label    = AppTextStyle(font: AppFont.sans(12, medium: true), tracking: 12 * 0.07)
     static let mono     = AppTextStyle(font: AppFont.mono(12), tracking: 0)
@@ -71,13 +89,13 @@ struct MarkdownText: View {
             ForEach(lines) { line in
                 switch line.kind {
                 case .h1:
-                    Text(inline(line.text)).font(.system(size: 22, weight: .bold))
+                    Text(inline(line.text)).appTextStyle(.title)
                         .foregroundStyle(AppColors.textPrimary).padding(.top, Spacing.s1)
                 case .h2:
-                    Text(inline(line.text)).font(.system(size: 18, weight: .bold))
+                    Text(inline(line.text)).appTextStyle(.heading)
                         .foregroundStyle(AppColors.textPrimary).padding(.top, Spacing.s1)
                 case .h3:
-                    Text(inline(line.text)).font(.system(size: 15, weight: .semibold))
+                    Text(inline(line.text)).appTextStyle(.bodyMedium)
                         .foregroundStyle(AppColors.textPrimary)
                 case .bullet:
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.s2) {

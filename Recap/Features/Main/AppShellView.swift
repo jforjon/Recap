@@ -33,6 +33,19 @@ struct AppShellView: View {
         .fullScreenCover(isPresented: .constant(recordingManager.phase == .recording)) {
             RecordingSessionView(recordingManager: recordingManager)
         }
+        // Whatever the capture screen couldn't report because it had already
+        // been dismissed — chiefly a recording dropped for having no transcript.
+        .alert("Recording not saved", isPresented: Binding(
+            get: { recordingManager.alertMessage != nil },
+            set: { if !$0 { recordingManager.clearAlert() } }
+        )) {
+            Button("OK") { recordingManager.clearAlert() }
+        } message: {
+            Text(recordingManager.alertMessage ?? "")
+        }
+        // Warmed here rather than in the picker: the language a recording starts
+        // in has to be known before the first tap, wherever it's started from.
+        .task { await SpokenLanguageStore.shared.loadAvailable() }
     }
 
     /// iPad / Mac: the full 3-column layout.

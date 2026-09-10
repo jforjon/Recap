@@ -416,16 +416,13 @@ struct ProjectDetailView: View {
     }
 
     /// Starts a project recording from the empty-state CTA, using the same
-    /// language resolution as the bar (chosen default, else first configured).
+    /// language the bar would have preselected (chosen default, else English).
     private func startRecording() async {
         guard !isStartingRecording else { return }
         isStartingRecording = true
         defer { isStartingRecording = false }
 
-        let languages = SpokenLanguageStore.selected
-        let language = languages.isEmpty
-            ? nil
-            : (SpokenLanguageStore.defaultLanguage ?? languages.first)
+        let language = SpokenLanguageStore.shared.defaultLanguage
         do {
             try await recordingManager.startRecording(projectId: projectId, language: language)
         } catch {

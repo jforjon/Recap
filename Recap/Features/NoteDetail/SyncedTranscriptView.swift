@@ -22,6 +22,9 @@ struct SyncedTranscriptView: View {
     /// Suspended while the user is reading somewhere else in the transcript, so
     /// auto-scroll never yanks the page out from under them.
     @State private var followPlayback = true
+    /// Set once `load` has run, so the "no audio" note isn't shown for the frame
+    /// before the file has been looked for.
+    @State private var didAttemptLoad = false
 
     private var segments: [TranscriptSegment] { note.transcriptSegments ?? [] }
     private var paragraphs: [[TranscriptSegment]] { segments.paragraphs() }
@@ -44,6 +47,10 @@ struct SyncedTranscriptView: View {
                     .appTextStyle(.label)
                     .foregroundStyle(AppColors.textSecondary)
 
+                if didAttemptLoad && !player.hasAudio && !player.isPreparing {
+                    noAudioNote
+                }
+
                 if paragraphs.isEmpty {
                     untimedParagraphs
                 } else {
@@ -61,8 +68,34 @@ struct SyncedTranscriptView: View {
                 playerBar
             }
         }
-        .task { await player.load(noteId: note.id) }
+        .task {
+            await player.load(noteId: note.id)
+            didAttemptLoad = true
+        }
         .onDisappear { player.stop() }
+    }
+
+    /// Without this the tab is simply missing its player, which reads as playback
+    /// being broken rather than as there being nothing to play. The two reasons
+    /// need different answers: one is a setting to change, the other can't be
+    /// fixed for this recording at all.
+    private var noAudioNote: some View {
+        HStack(alignment: .top, spacing: Spacing.s2) {
+            Image(systemName: "waveform.slash")
+                .font(.system(size: 13))
+            Text(AudioStore.isEnabled
+                 ? "No audio was saved for this recording — it was made before saving audio was switched on, so there's nothing to play back."
+                 : "Audio isn't being saved, so there's nothing to play back. Turn on Save audio in Settings to keep the audio for recordings you make from now on.")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .appTextStyle(.small)
+        .foregroundStyle(AppColors.textSecondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.s3)
+        .background(
+            RoundedRectangle(cornerRadius: Radius.md)
+                .fill(AppColors.chipFill)
+        )
     }
 
     // MARK: - Player

@@ -33,8 +33,7 @@ struct LibraryContentView: View {
             Section {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
                     Text("Library")
-                        .font(.system(size: 32, weight: .bold))
-                        .tracking(-0.8)
+                        .appTextStyle(.displayBold)
                         .foregroundStyle(AppColors.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, Spacing.s2)

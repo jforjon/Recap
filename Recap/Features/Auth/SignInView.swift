@@ -16,7 +16,7 @@ struct SignInView: View {
                 VStack(alignment: .leading, spacing: Spacing.s3) {
                     logoMark
                     Text("recap")
-                        .font(AppFont.sans(40, medium: true))
+                        .font(AppFont.sans(40, weight: .bold))
                         .tracking(-1.2)
                         .foregroundStyle(AppColors.textPrimary)
                     Text("Talks, panels and trainings — transcribed live, on your device.")

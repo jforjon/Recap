@@ -12,6 +12,19 @@ enum StorageService {
         return session.user.id
     }
 
+    /// Deletes the signed-in user's account and everything in it.
+    ///
+    /// Calls the `delete_own_account` SECURITY DEFINER function rather than any
+    /// admin endpoint — deleting a user needs the service_role key, which must
+    /// never ship in an app binary. The function takes no argument and only ever
+    /// touches `auth.uid()`, so there is nothing here to get wrong.
+    ///
+    /// Server-side only. The caller is responsible for the parts that live on
+    /// the device: the Keychain key, the pending-note manifest and saved audio.
+    static func deleteAccount() async throws {
+        try await db.rpc("delete_own_account").execute()
+    }
+
     /// Trims a string and returns nil if the result is empty — mirrors nullableString() in storage.ts.
     static func nullableString(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {

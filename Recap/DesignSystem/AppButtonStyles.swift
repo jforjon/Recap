@@ -111,21 +111,21 @@ struct SmallDestructiveButtonStyle: ButtonStyle {
     }
 }
 
-/// Round, icon-only tap target, raised off the screen like a card.
+/// Round, icon-only tap target — a secondary button with no room for a label.
 ///
-/// Opaque rather than a translucent wash: the button has a single call site and
-/// sits only on `background`, so there is no varying backdrop for an alpha to
-/// adapt to — the one thing alpha buys. That makes it the same press pair
-/// `ProjectCard` uses, and keeps the control on ramp steps instead of the
-/// hairline tokens it used to borrow.
+/// Treatment is `SecondaryButtonStyle`'s, exactly: no fill, a hairline ring, the
+/// label colour on the glyph, and the same press dimming. Only the shape differs,
+/// because a 44×44 circle is what a lone glyph wants instead of a stretched pill.
+/// It was previously a filled charcoal disc with its own press behaviour, which
+/// made it the one control in the file that dimmed differently from every other
+/// button.
 struct IconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(AppColors.textMuted)
+            .foregroundStyle(AppColors.textPrimary)
             .frame(width: 44, height: 44)
-            .background(
-                Circle().fill(configuration.isPressed ? AppColors.surfaceElevated : AppColors.surface)
-            )
+            .background(Circle().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.6 : 1)
     }
 }
 

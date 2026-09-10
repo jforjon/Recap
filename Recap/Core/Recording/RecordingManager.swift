@@ -54,6 +54,10 @@ final class RecordingManager {
     /// The note behind the most recent `savedVersion` bump. Lists insert it
     /// directly so the row never blinks out between "Saving…" and the reload.
     private(set) var lastSaved: Note?
+    /// Something happened to a recording after the capture screen was dismissed
+    /// and there is no longer a screen of its own to say so on. `AppShellView`
+    /// presents this, since it outlives every screen a recording can start from.
+    private(set) var alertMessage: String?
 
     private let transcriber = LiveTranscriber()
     private let store = PendingNoteStore.shared
@@ -198,10 +202,14 @@ final class RecordingManager {
         }
         let transcript = note.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         // Nothing was actually captured — drop it rather than save an empty note.
+        // Say so: this used to happen silently, so a recording that transcribed
+        // nothing (wrong language, missing model, muted mic) simply vanished
+        // from the list and looked like the app had lost it.
         guard !transcript.isEmpty else {
             AudioStore.delete(id)
             store.remove(id)
             dropPendingUpload(id)
+            alertMessage = "Nothing was transcribed, so that recording wasn't saved. No speech was picked up — check that the recording language matches what was spoken, and that nothing was covering the microphone."
             return
         }
         guard let userId = try? await SupabaseService.client.auth.session.user.id else {
@@ -248,6 +256,10 @@ final class RecordingManager {
             // Left in the queue; retried on next launch / reconnect / foreground.
             markPendingUploadWaiting(id)
         }
+    }
+
+    func clearAlert() {
+        alertMessage = nil
     }
 
     /// Announces a note that lists should show without waiting for a refresh.

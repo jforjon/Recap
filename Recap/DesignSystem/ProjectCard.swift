@@ -53,13 +53,12 @@ struct ProjectCard: View {
             iconTile
             VStack(alignment: .leading, spacing: 5) {
                 Text(name)
-                    .font(.system(.callout, design: .default).weight(.semibold))
-                    .tracking(-0.2)
+                    .appTextStyle(.bodyMedium)
                     .foregroundStyle(Color.recapTextPrimary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Text(countsText)
-                    .font(.system(.caption, design: .monospaced))
+                    .appTextStyle(.mono)
                     .textCase(.uppercase)
                     .foregroundStyle(AppColors.textTertiary)
             }

@@ -71,7 +71,7 @@ struct AudioImporterModifier: ViewModifier {
                 pickedURL: url,
                 projectId: projectId,
                 // Same language resolution as the Record button.
-                languageCode: SpokenLanguageStore.defaultLanguage,
+                languageCode: SpokenLanguageStore.shared.defaultLanguage,
                 keepAudio: keepAudio
             )
         } catch {

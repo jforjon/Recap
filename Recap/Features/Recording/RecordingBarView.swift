@@ -14,17 +14,22 @@ struct RecordingBarView: View {
     @State private var errorMessage: String?
     @State private var chosenLanguage = ""
 
+    private var languages: SpokenLanguageStore { SpokenLanguageStore.shared }
+
     var body: some View {
         Group {
             if recordingManager.phase == .idle {
-                let languages = SpokenLanguageStore.selected
+                let options = languages.options
                 HStack(spacing: Spacing.s3) {
-                    if !languages.isEmpty {
-                        languageMenu(languages)
+                    // Shown whenever the device has any models at all. It used to
+                    // appear only once languages had been shortlisted in Settings,
+                    // which meant the language of a recording couldn't be chosen
+                    // without first knowing there was a setting for it.
+                    if !options.isEmpty {
+                        languageMenu(options)
                     }
                     Button(isStarting ? "Starting…" : "Start recording") {
-                        let language = languages.isEmpty ? nil : effectiveLanguage(languages)
-                        Task { await start(language: language) }
+                        Task { await start(language: effectiveLanguage) }
                     }
                     .buttonStyle(.appPrimary)
                     .disabled(isStarting)
@@ -32,6 +37,7 @@ struct RecordingBarView: View {
             }
         }
         .padding(.horizontal, Spacing.s4)
+        .task { await languages.loadAvailable() }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
             Button("OK") { errorMessage = nil }
         } message: {
@@ -42,17 +48,17 @@ struct RecordingBarView: View {
     // MARK: - Language selection
 
     @ViewBuilder
-    private func languageMenu(_ languages: [String]) -> some View {
-        let current = effectiveLanguage(languages)
+    private func languageMenu(_ options: [String]) -> some View {
+        let current = effectiveLanguage
         Menu {
-            ForEach(languages, id: \.self) { code in
+            ForEach(options, id: \.self) { code in
                 Button {
                     chosenLanguage = code
                 } label: {
                     if code == current {
-                        Label(displayName(code), systemImage: "checkmark")
+                        Label(SpokenLanguageStore.displayName(code), systemImage: "checkmark")
                     } else {
-                        Text(displayName(code))
+                        Text(SpokenLanguageStore.displayName(code))
                     }
                 }
                 .tint(AppColors.textPrimary)
@@ -63,7 +69,7 @@ struct RecordingBarView: View {
             HStack(spacing: Spacing.s1 + 2) {
                 Image(systemName: "globe")
                     .font(.system(size: 15))
-                Text(shortName(current))
+                Text(shortName(current ?? ""))
             }
             .appTextStyle(.bodyMedium)
             .foregroundStyle(AppColors.textPrimary)
@@ -72,17 +78,14 @@ struct RecordingBarView: View {
             .padding(.horizontal, Spacing.s4)
             .background(Capsule().strokeBorder(Color.white.opacity(0.14), lineWidth: 1))
         }
+        .accessibilityLabel("Recording language")
     }
 
-    /// The chosen language if still valid, otherwise the settings default (or the
-    /// first available), so the default is preselected.
-    private func effectiveLanguage(_ languages: [String]) -> String {
-        if languages.contains(chosenLanguage) { return chosenLanguage }
-        return SpokenLanguageStore.defaultLanguage ?? languages.first ?? ""
-    }
-
-    private func displayName(_ code: String) -> String {
-        Locale.current.localizedString(forIdentifier: code) ?? code
+    /// The language picked in the moment if it's still on offer, otherwise the
+    /// store's default — the one set in Settings, else English.
+    private var effectiveLanguage: String? {
+        if languages.options.contains(chosenLanguage) { return chosenLanguage }
+        return languages.defaultLanguage
     }
 
     private func shortName(_ code: String) -> String {

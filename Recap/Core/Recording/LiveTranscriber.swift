@@ -1,41 +1,152 @@
 import Foundation
 @preconcurrency import AVFoundation
 import Accelerate
+import Observation
 import Speech
 
-/// User's chosen transcription languages, persisted per-device (the language
-/// models are downloaded per-device). The list is ordered; `defaultLanguage`
-/// designates which one is preselected next to the Record button. Empty by
-/// default — language selection is entirely optional.
-enum SpokenLanguageStore {
+/// The user's transcription-language state, persisted per-device (the language
+/// models are downloaded per-device).
+///
+/// Observable rather than bare `UserDefaults` reads. The language picker lives in
+/// `AppShellView`'s body while Settings is pushed from the Library's, so nothing
+/// re-read the defaults on the way back: a language added in Settings didn't
+/// appear next to Record until the app was relaunched.
+///
+/// `selected` is an optional shortlist, empty by default. Empty means the picker
+/// offers every language this device can transcribe, so choosing one never
+/// requires a trip to Settings first.
+@Observable
+final class SpokenLanguageStore {
+    static let shared = SpokenLanguageStore()
+
     private static let selectedKey = "spokenLanguages.selected"
     private static let defaultKey = "spokenLanguages.default"
 
-    /// BCP-47 identifiers the user has added (e.g. "en-US", "fr-FR").
-    static var selected: [String] {
-        get { UserDefaults.standard.stringArray(forKey: selectedKey) ?? [] }
-        set { UserDefaults.standard.set(newValue, forKey: selectedKey) }
+    /// BCP-47 identifiers the user has shortlisted (e.g. "en-US", "fr-FR").
+    private(set) var selected: [String]
+
+    /// Every BCP-47 identifier this device can transcribe on device, sorted by
+    /// display name. Empty until `loadAvailable()` has run.
+    private(set) var available: [String] = []
+
+    /// The subset of `available` whose model is already downloaded. Empty both
+    /// before `loadAvailable()` runs and on the Simulator, which is why
+    /// `downloadState` reports "unknown" rather than "not downloaded" — a screen
+    /// must not claim a language needs downloading when it can't tell.
+    private(set) var installed: [String] = []
+
+    /// The user's explicit choice, which may no longer be shortlisted.
+    private var storedDefault: String?
+
+    private init() {
+        selected = UserDefaults.standard.stringArray(forKey: Self.selectedKey) ?? []
+        storedDefault = UserDefaults.standard.string(forKey: Self.defaultKey)
     }
 
-    /// The language preselected next to Record. Falls back to the first selected.
-    static var defaultLanguage: String? {
-        get {
-            if let stored = UserDefaults.standard.string(forKey: defaultKey), selected.contains(stored) {
-                return stored
-            }
-            return selected.first
-        }
-        set { UserDefaults.standard.set(newValue, forKey: defaultKey) }
+    /// What the picker offers: the shortlist when there is one, otherwise
+    /// everything the device supports.
+    var options: [String] {
+        selected.isEmpty ? available : selected
     }
 
-    static func toggle(_ code: String) {
-        var current = selected
-        if let index = current.firstIndex(of: code) {
-            current.remove(at: index)
+    /// The language preselected next to Record: the user's chosen default while
+    /// it is still on offer, otherwise English, otherwise whatever comes first.
+    ///
+    /// English rather than the device's language. A phone set to French is still
+    /// mostly used to record talks given in English, and the wrong model doesn't
+    /// fail loudly — it transcribes confident nonsense.
+    var defaultLanguage: String? {
+        if let storedDefault, options.contains(storedDefault) { return storedDefault }
+        return Self.english(in: options) ?? options.first
+    }
+
+    func setDefault(_ code: String?) {
+        storedDefault = code
+        UserDefaults.standard.set(code, forKey: Self.defaultKey)
+    }
+
+    func toggle(_ code: String) {
+        if selected.contains(code) {
+            remove(code)
         } else {
-            current.append(code)
+            add(code)
         }
-        selected = current
+    }
+
+    /// Appends a language to the shortlist. The first one added becomes the
+    /// default, since position is what Settings uses to express it.
+    func add(_ code: String) {
+        guard !selected.contains(code) else { return }
+        var current = selected
+        current.append(code)
+        persist(current)
+        if current.count == 1 { setDefault(code) }
+    }
+
+    func remove(_ code: String) {
+        remove(atOffsets: IndexSet(selected.indices.filter { selected[$0] == code }))
+    }
+
+    func remove(atOffsets offsets: IndexSet) {
+        var current = selected
+        current.remove(atOffsets: offsets)
+        persist(current)
+        syncDefaultToFirst()
+    }
+
+    /// Reorders the shortlist. Settings shows the first entry as the default and
+    /// changes it by dragging, so the stored default follows the move.
+    func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        var current = selected
+        current.move(fromOffsets: source, toOffset: destination)
+        persist(current)
+        syncDefaultToFirst()
+    }
+
+    /// Whether `code`'s on-device model is downloaded — `nil` when the device
+    /// hasn't told us, which is not the same as "no".
+    func isInstalled(_ code: String) -> Bool? {
+        installed.isEmpty ? nil : installed.contains(code)
+    }
+
+    private func persist(_ codes: [String]) {
+        selected = codes
+        UserDefaults.standard.set(codes, forKey: Self.selectedKey)
+    }
+
+    /// Keeps the stored default equal to the first shortlisted language. With an
+    /// empty shortlist the picker offers everything, so the stored choice is left
+    /// alone rather than cleared.
+    private func syncDefaultToFirst() {
+        guard let first = selected.first else { return }
+        setDefault(first)
+    }
+
+    /// Fills `available` from the device's on-device models. Cheap to call from
+    /// every screen that shows the picker — it only asks once.
+    func loadAvailable() async {
+        guard available.isEmpty else { return }
+        var codes = await LiveTranscriber.supportedLanguages().map { $0.identifier(.bcp47) }
+        #if targetEnvironment(simulator)
+        // The Simulator ships no speech models, so the real list is empty and
+        // there would be nothing to pick. Recording still needs a real device.
+        if codes.isEmpty {
+            codes = ["en-US", "en-GB", "fr-FR", "es-ES", "de-DE", "it-IT", "pt-BR", "ja-JP"]
+        }
+        #endif
+        available = codes.sorted { Self.displayName($0) < Self.displayName($1) }
+        installed = await SpeechTranscriber.installedLocales.map { $0.identifier(.bcp47) }
+    }
+
+    static func displayName(_ code: String) -> String {
+        Locale.current.localizedString(forIdentifier: code) ?? code
+    }
+
+    /// Prefers en-US, then any other English, so "English" means the same thing
+    /// whatever order the device happens to list its models in.
+    private static func english(in codes: [String]) -> String? {
+        if codes.contains("en-US") { return "en-US" }
+        return codes.first { Locale(identifier: $0).language.languageCode?.identifier == "en" }
     }
 }
 
@@ -252,21 +363,38 @@ final class LiveTranscriber {
     private func ensureModelInstalled(for transcriber: SpeechTranscriber, locale: Locale) async throws {
         let wanted = locale.identifier(.bcp47)
 
+        let name = SpokenLanguageStore.displayName(wanted)
+
         let supported = await SpeechTranscriber.supportedLocales.map { $0.identifier(.bcp47) }
         guard supported.contains(wanted) else {
-            throw TranscriberError(message: "On-device transcription isn't available for \(locale.identifier).")
+            throw TranscriberError(message: "On-device transcription isn't available for \(name).")
         }
 
-        // Reserve (subscribe to) the locale so its asset status can be checked and
-        // the model kept installed.
-        _ = try? await AssetInventory.reserve(locale: locale)
-
+        // Already installed: the reservation only keeps it that way, so failing
+        // to renew it is not a reason to refuse to record.
         let installed = await SpeechTranscriber.installedLocales.map { $0.identifier(.bcp47) }
-        if installed.contains(wanted) { return }
-
-        if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-            try await request.downloadAndInstall()
+        if installed.contains(wanted) {
+            _ = try? await AssetInventory.reserve(locale: locale)
+            return
         }
+
+        // Not installed, so every step below is load-bearing. Swallowing these is
+        // what made a missing model look like a working recording that simply
+        // never transcribed anything.
+        do {
+            _ = try await AssetInventory.reserve(locale: locale)
+        } catch {
+            throw TranscriberError(
+                message: "\(name) couldn't be reserved for on-device transcription. You may have reserved as many languages as iOS allows — remove one under Spoken languages in Settings and try again."
+            )
+        }
+
+        guard let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else {
+            throw TranscriberError(
+                message: "The on-device model for \(name) isn't available to download right now. Check your connection and try again."
+            )
+        }
+        try await request.downloadAndInstall()
     }
 
     // MARK: - Audio engine

@@ -68,6 +68,13 @@ final class PendingNoteStore {
         saveAllUnlocked(all)
     }
 
+    /// Drops the whole queue. Used when the account itself is going away, where
+    /// retrying an upload for a user that no longer exists would only fail.
+    func removeAll() {
+        lock.lock(); defer { lock.unlock() }
+        try? fileManager.removeItem(at: manifestURL)
+    }
+
     /// Every queued recording — retried on launch, on regaining connectivity, and
     /// when the app returns to the foreground.
     func pendingNotes() -> [PendingNote] {
