@@ -435,6 +435,8 @@ struct ProjectDetailView: View {
         notes.removeAll { $0.id == noteId }
         do {
             _ = try await StorageService.updateNote(noteId, fields: ["project_id": .null])
+            // Unfiled again, so it belongs back on the Library's own list.
+            nav.projectsVersion += 1
         } catch {
             if error.isCancellation { return }
             errorMessage = error.localizedDescription

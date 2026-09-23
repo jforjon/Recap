@@ -61,9 +61,22 @@ enum StorageService {
             .value
     }
 
-    /// Same query as getNotes() — kept as a separate name to mirror storage.ts's getStandaloneNotes().
+    /// Recordings that aren't filed under a project.
+    ///
+    /// A recording is either in exactly one project or loose — `project_id` is a
+    /// single nullable column, so there is no third state. The Library lists the
+    /// loose ones beside the projects themselves, the way a folder listing shows
+    /// folders and the files that aren't in one; a filed recording appears on its
+    /// project's screen instead.
     static func getStandaloneNotes() async throws -> [Note] {
-        try await getNotes()
+        let userId = try await currentUserId()
+        return try await db.from("notes")
+            .select()
+            .eq("user_id", value: userId)
+            .is("project_id", value: nil)
+            .order("created_at", ascending: false)
+            .execute()
+            .value
     }
 
     static func getNoteById(_ id: UUID) async throws -> Note {

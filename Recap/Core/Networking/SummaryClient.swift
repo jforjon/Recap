@@ -28,8 +28,7 @@ enum SummaryClient {
     invent detail that isn't in the transcript, and don't note that the \
     transcript is imperfect.
 
-    Reply with a single JSON object and nothing else — no Markdown fence, no \
-    commentary. Keys:
+    Reply with a single JSON object. Keys:
 
     - "title": a specific, plain title, 8 words or fewer. Name the actual \
       subject rather than the format. Not "Panel discussion" but "Pricing \
@@ -53,6 +52,26 @@ enum SummaryClient {
       app — but do attribute points to people inside the summary as usual.
     """
 
+    /// Mirrors the keys described in the system prompt. The API enforces this
+    /// shape, so the reply can't arrive fenced, prefaced, or with a raw newline
+    /// inside the Markdown summary — each of which used to fail the parse.
+    private static let schema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "title": ["type": "string"],
+            "summary": ["type": "string"],
+            "category": [
+                "anyOf": [
+                    ["type": "string", "enum": NoteCategory.allCases.map(\.rawValue)],
+                    ["type": "null"],
+                ],
+            ],
+            "speaker": ["anyOf": [["type": "string"], ["type": "null"]]],
+        ],
+        "required": ["title", "summary", "category", "speaker"],
+        "additionalProperties": false,
+    ]
+
     static func generateSummary(transcript: String) async throws -> Result {
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -61,7 +80,8 @@ enum SummaryClient {
 
         let text = try await AnthropicClient.complete(
             system: system,
-            user: "Transcript:\n\n\(trimmed)"
+            user: "Transcript:\n\n\(trimmed)",
+            outputSchema: schema
         )
 
         struct Payload: Decodable {
@@ -70,14 +90,24 @@ enum SummaryClient {
             let category: String?
             let speaker: String?
         }
-        guard
-            let data = AnthropicClient.unwrapJSON(text).data(using: .utf8),
-            let payload = try? JSONDecoder().decode(Payload.self, from: data),
-            let title = payload.title?.trimmingCharacters(in: .whitespacesAndNewlines),
-            let summary = payload.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
-            !title.isEmpty, !summary.isEmpty
-        else {
+        let payload: Payload
+        do {
+            payload = try JSONDecoder().decode(
+                Payload.self,
+                from: Data(AnthropicClient.unwrapJSON(text).utf8)
+            )
+        } catch {
+            // Should be unreachable with the schema enforced; if it does happen
+            // the console needs to show what came back, not just that it failed.
+            #if DEBUG
+            print("SummaryClient: could not decode reply (\(error)):\n\(text)")
+            #endif
             throw SummaryError(message: "The summary came back in an unexpected format. Try again.")
+        }
+        let title = (payload.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let summary = (payload.summary ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, !summary.isEmpty else {
+            throw SummaryError(message: "The summary came back empty. Try again.")
         }
 
         let speaker = payload.speaker?.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -36,6 +36,13 @@ struct NoteDetailView: View {
     @State private var renameDraft = ""
     @State private var showMoveToProject = false
     @State private var projects: [ProjectWithNoteCount] = []
+    /// Nil until the project list has come back for this presentation of the
+    /// sheet. Distinguishes "no projects yet" (offer to create one) from "not
+    /// loaded yet" and "the load failed", which used to collapse into the
+    /// create form: `loadProjects` reported its error through the same alert
+    /// the sheet was covering, so a failed fetch looked like an empty account.
+    @State private var projectsLoadError: String?
+    @State private var hasLoadedProjects = false
     @State private var showCreateProject = false
     @State private var newProjectName = ""
     @State private var isSavingProject = false
@@ -113,7 +120,7 @@ struct NoteDetailView: View {
                         showRename = true
                     }
                     AppMenuButton(title: "Move to project", systemImage: "folder") {
-                        Task { await loadProjects(); showMoveToProject = true }
+                        showMoveToProject = true
                     }
                     AppMenuButton(title: "Delete recording", systemImage: "trash", role: .destructive) {
                         showDeleteConfirm = true
@@ -144,19 +151,40 @@ struct NoteDetailView: View {
         .sheet(isPresented: $showMoveToProject, onDismiss: resetMoveToProjectState) {
             NavigationStack {
                 Group {
-                    if projects.isEmpty || showCreateProject {
+                    if showCreateProject || (hasLoadedProjects && projects.isEmpty) {
                         createProjectForm
+                    } else if let projectsLoadError {
+                        EmptyStateView(
+                            icon: "exclamationmark.triangle",
+                            title: "Couldn't load projects",
+                            message: projectsLoadError,
+                            action: .init(title: "Try again") {
+                                Task { await loadProjects() }
+                            }
+                        )
+                    } else if !hasLoadedProjects {
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(AppColors.accentGraphic)
                     } else {
                         existingProjectsList
                     }
                 }
-                .navigationTitle(projects.isEmpty || showCreateProject ? "New project" : "Add to project")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(AppColors.background.ignoresSafeArea())
+                .navigationTitle(
+                    showCreateProject || (hasLoadedProjects && projects.isEmpty)
+                        ? "New project" : "Add to project"
+                )
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { showMoveToProject = false }
                     }
                 }
+                // Loaded by the sheet itself, so it opens at once and the
+                // spinner, the list and any failure all live in the same place.
+                .task { await loadProjects() }
             }
         }
         .alert("Error", isPresented: .constant(errorMessage != nil)) {
@@ -256,6 +284,8 @@ struct NoteDetailView: View {
     private func resetMoveToProjectState() {
         showCreateProject = false
         newProjectName = ""
+        hasLoadedProjects = false
+        projectsLoadError = nil
     }
 
     /// Read mode by default: shows the saved speaker & context with an Edit/Add
@@ -426,11 +456,15 @@ struct NoteDetailView: View {
     }
 
     private func loadProjects() async {
+        projectsLoadError = nil
         do {
             projects = try await StorageService.getProjectsWithNoteCounts()
+            hasLoadedProjects = true
         } catch {
             if error.isCancellation { return }
-            errorMessage = error.localizedDescription
+            // Shown inside the sheet: the view's own error alert can't present
+            // over it, which is how a failed load used to pass for no projects.
+            projectsLoadError = error.localizedDescription
         }
     }
 
@@ -506,6 +540,9 @@ struct NoteDetailView: View {
     private func moveToProject(_ projectId: UUID) async {
         do {
             note = try await StorageService.updateNote(noteId, fields: ["project_id": .string(projectId.uuidString)])
+            // The Library lists only unfiled recordings, so this one has to
+            // drop off it — and both projects' counts have changed.
+            nav.projectsVersion += 1
             showMoveToProject = false
         } catch {
             if error.isCancellation { return }

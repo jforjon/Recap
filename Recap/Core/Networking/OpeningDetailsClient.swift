@@ -31,8 +31,7 @@ enum OpeningDetailsClient {
     are often misheard. Use the transcript's own spelling rather than guessing \
     at a different one, and never add a detail that isn't there.
 
-    Reply with a single JSON object and nothing else — no Markdown fence, no \
-    commentary. Keys:
+    Reply with a single JSON object. Keys:
 
     - "title": eight words at most, naming the actual subject rather than the \
       format — "Pricing pressure in enterprise SaaS", not "A panel discussion". \
@@ -48,6 +47,18 @@ enum OpeningDetailsClient {
       an invented one is worse than none.
     """
 
+    /// Enforced by the API, so a reply is always parseable JSON with both keys
+    /// present — null where the model has nothing to say.
+    private static let schema: [String: Any] = [
+        "type": "object",
+        "properties": [
+            "title": ["anyOf": [["type": "string"], ["type": "null"]]],
+            "speaker": ["anyOf": [["type": "string"], ["type": "null"]]],
+        ],
+        "required": ["title", "speaker"],
+        "additionalProperties": false,
+    ]
+
     /// Throws only for genuine failures — a missing key, a network error.
     static func generate(transcript: String) async throws -> Details {
         let words = transcript.split(whereSeparator: \.isWhitespace)
@@ -58,8 +69,9 @@ enum OpeningDetailsClient {
         let text = try await AnthropicClient.complete(
             system: system,
             user: "Transcript opening:\n\n\(excerpt)",
-            maxTokens: 400,
-            model: AnthropicClient.fastModel
+            maxTokens: 1024,
+            model: AnthropicClient.fastModel,
+            outputSchema: schema
         )
 
         struct Payload: Decodable {

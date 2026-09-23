@@ -1,6 +1,6 @@
 import Foundation
 
-enum NoteCategory: String, Codable {
+enum NoteCategory: String, Codable, CaseIterable {
     case talk, training, panel
 }
 

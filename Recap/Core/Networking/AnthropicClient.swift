@@ -26,11 +26,25 @@ enum AnthropicClient {
     }
 
     /// Sends one prompt and returns the model's text response.
+    ///
+    /// `outputSchema` is a JSON Schema (`additionalProperties: false`, every key
+    /// listed in `required`, `anyOf` for nullables). When given, the API
+    /// constrains generation to it, so the reply *is* the JSON — no fence, no
+    /// preamble, no unescaped newline inside a Markdown string. Asking nicely in
+    /// the system prompt was not enough: a long summary was the most common
+    /// place for the model to slip, and the parse failure surfaced as
+    /// "unexpected format".
+    ///
+    /// `maxTokens` is a cap, not a target — the model stops at the end of its
+    /// answer, so a generous ceiling costs nothing on a short one. A cap that
+    /// is hit truncates the reply mid-JSON, which is why the default is high
+    /// and why hitting it is an error rather than a silently mangled result.
     static func complete(
         system: String,
         user: String,
-        maxTokens: Int = 2048,
-        model: String = model
+        maxTokens: Int = 8192,
+        model: String = model,
+        outputSchema: [String: Any]? = nil
     ) async throws -> String {
         guard let key = try await AnthropicKeyStore.load() else {
             throw ClientError(
@@ -46,25 +60,20 @@ enum AnthropicClient {
         // A long talk plus a long reply can take a while on a slow connection.
         request.timeoutInterval = 120
 
-        struct Message: Encodable {
-            let role = "user"
-            let content: String
+        // Built as a dictionary rather than an `Encodable` so the schema — an
+        // arbitrary nested JSON object — can go straight in.
+        var body: [String: Any] = [
+            "model": model,
+            "max_tokens": maxTokens,
+            "system": system,
+            "messages": [["role": "user", "content": user]],
+        ]
+        if let outputSchema {
+            body["output_config"] = [
+                "format": ["type": "json_schema", "schema": outputSchema],
+            ]
         }
-        struct Body: Encodable {
-            let model: String
-            let maxTokens: Int
-            let system: String
-            let messages: [Message]
-            enum CodingKeys: String, CodingKey {
-                case model, system, messages
-                case maxTokens = "max_tokens"
-            }
-        }
-
-        request.httpBody = try JSONEncoder().encode(
-            Body(model: model, maxTokens: maxTokens, system: system,
-                 messages: [Message(content: user)])
-        )
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -75,7 +84,12 @@ enum AnthropicClient {
             struct Block: Decodable { let text: String? }
             struct APIError: Decodable { let message: String? }
             let content: [Block]?
+            let stopReason: String?
             let error: APIError?
+            enum CodingKeys: String, CodingKey {
+                case content, error
+                case stopReason = "stop_reason"
+            }
         }
         let decoded = try? JSONDecoder().decode(ResponseBody.self, from: data)
 
@@ -90,6 +104,18 @@ enum AnthropicClient {
             throw ClientError(
                 message: decoded?.error?.message ?? "Anthropic returned an error (\(http.statusCode))."
             )
+        }
+
+        // A reply cut off at the cap is not a reply: for JSON it is unparseable,
+        // and for prose it ends mid-sentence. Say what happened rather than
+        // handing back something that fails further down for a vaguer reason.
+        if decoded?.stopReason == "max_tokens" {
+            throw ClientError(
+                message: "The reply was too long to finish. Try again — a retry usually comes back shorter."
+            )
+        }
+        if decoded?.stopReason == "refusal" {
+            throw ClientError(message: "Anthropic declined to process this transcript.")
         }
 
         let text = (decoded?.content ?? []).compactMap(\.text).joined()

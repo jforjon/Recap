@@ -7,12 +7,6 @@ struct LibraryContentView: View {
     let importManager: AudioImportManager
     let recordingManager: RecordingManager
 
-    enum Filter: String, CaseIterable, Hashable {
-        case all = "All"
-        case projects = "Projects"
-        case recordings = "Recordings"
-    }
-
     @State private var notes: [Note] = []
     @State private var projects: [ProjectWithNoteCount] = []
     /// Personal notes for the whole account, grouped by what they hang off, so
@@ -20,7 +14,6 @@ struct LibraryContentView: View {
     @State private var notesByRecording: [UUID: [PersonalNote]] = [:]
     @State private var notesByProject: [UUID: [PersonalNote]] = [:]
     @State private var searchText = ""
-    @State private var filter: Filter = .all
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var showSettings = false
@@ -39,25 +32,15 @@ struct LibraryContentView: View {
                         .padding(.top, Spacing.s2)
 
                     searchBar
-                    HStack(spacing: Spacing.s2) {
-                        ForEach(Filter.allCases, id: \.self) { option in
-                            FilterChip(title: option.rawValue, isActive: filter == option) {
-                                filter = option
-                            }
-                        }
-                        Spacer(minLength: 0)
-                    }
                 }
                 .recapCardRow()
 
                 // Above everything: a recording just sent, or an import in
                 // flight, is the most recent thing the user did and the thing
                 // they'll be watching for.
-                if showsRecordings {
-                    ForEach(pendingUploads) { upload in
-                        PendingRecordingRow(upload: upload)
-                            .recapCardRow()
-                    }
+                ForEach(pendingUploads) { upload in
+                    PendingRecordingRow(upload: upload)
+                        .recapCardRow()
                 }
 
                 ForEach(importManager.inFlight) { progress in
@@ -71,57 +54,53 @@ struct LibraryContentView: View {
                     emptyState.recapCardRow()
                 }
 
-                // Projects
-                if showsProjects {
-                    ForEach(projectHits) { hit in
-                        let item = hit.project
-                        // The snippet sits outside the Button so the projectCard
-                        // press treatment stays on the card itself.
-                        VStack(alignment: .leading, spacing: Spacing.s2) {
-                            Button {
-                                nav.sidebarSelection = .project(item.id)
-                            } label: {
-                                ProjectCard(
-                                    name: item.project.name,
-                                    recordingCount: item.noteCount,
-                                    noteCount: item.personalNoteCount
-                                )
-                            }
-                            .buttonStyle(.projectCard)
+                // Projects above recordings, so the list reads as a folder
+                // listing: the folders, then what isn't in one.
+                ForEach(projectHits) { hit in
+                    let item = hit.project
+                    // The snippet sits outside the Button so the projectCard
+                    // press treatment stays on the card itself.
+                    VStack(alignment: .leading, spacing: Spacing.s2) {
+                        Button {
+                            nav.sidebarSelection = .project(item.id)
+                        } label: {
+                            ProjectCard(
+                                name: item.project.name,
+                                recordingCount: item.noteCount,
+                                noteCount: item.personalNoteCount
+                            )
+                        }
+                        .buttonStyle(.projectCard)
 
-                            matchContext(field: hit.field, snippet: hit.snippet)
+                        matchContext(field: hit.field, snippet: hit.snippet)
+                    }
+                    .recapCardRow()
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            pendingDeleteProject = item
+                        } label: {
+                            Label("Delete project", systemImage: "trash")
                         }
-                        .recapCardRow()
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                pendingDeleteProject = item
-                            } label: {
-                                Label("Delete project", systemImage: "trash")
-                            }
-                            .tint(AppColors.destructive.default)
-                        }
+                        .tint(AppColors.destructive.default)
                     }
                 }
 
-                // Recordings
-                if showsRecordings {
-                    ForEach(noteHits) { hit in
-                        let note = hit.note
-                        Button {
-                            nav.detailSelection = .note(note.id)
+                ForEach(noteHits) { hit in
+                    let note = hit.note
+                    Button {
+                        nav.detailSelection = .note(note.id)
+                    } label: {
+                        noteRow(note, hit: hit)
+                    }
+                    .buttonStyle(.plain)
+                    .recapCardRow()
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            Task { await deleteNote(note.id) }
                         } label: {
-                            noteRow(note, hit: hit)
+                            Label("Delete", systemImage: "trash")
                         }
-                        .buttonStyle(.plain)
-                        .recapCardRow()
-                        .swipeActions(edge: .trailing) {
-                            Button(role: .destructive) {
-                                Task { await deleteNote(note.id) }
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                            .tint(AppColors.destructive.default)
-                        }
+                        .tint(AppColors.destructive.default)
                     }
                 }
             }
@@ -291,18 +270,14 @@ struct LibraryContentView: View {
         }
     }
 
-    // MARK: - Filtering
-
-    private var showsProjects: Bool { filter == .all || filter == .projects }
-    private var showsRecordings: Bool { filter == .all || filter == .recordings }
+    // MARK: - Search
 
     private var query: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var noteHits: [LibrarySearch.NoteHit] {
-        guard showsRecordings else { return [] }
-        return LibrarySearch.notes(
+        LibrarySearch.notes(
             matching: query,
             in: notes,
             personalNotesByRecording: notesByRecording
@@ -310,8 +285,7 @@ struct LibraryContentView: View {
     }
 
     private var projectHits: [LibrarySearch.ProjectHit] {
-        guard showsProjects else { return [] }
-        return LibrarySearch.projects(
+        LibrarySearch.projects(
             matching: query,
             in: projects,
             personalNotesByProject: notesByProject

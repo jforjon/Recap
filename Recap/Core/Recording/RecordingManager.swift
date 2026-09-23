@@ -64,6 +64,19 @@ final class RecordingManager {
 
     private var activeSessionId: UUID?
     private var activeProjectId: UUID?
+    /// Recordings whose transcriber is still being flushed after Stop. They sit
+    /// in the store as `.recording` with no `activeSessionId`, which is exactly
+    /// what an interrupted recording looks like — so without this, a retry pass
+    /// landing in that window (the app foregrounding, the network monitor
+    /// firing) would "recover" the half-flushed transcript as its own note, and
+    /// the real one would follow as a duplicate.
+    private var finishingSessionIds: Set<UUID> = []
+    /// Uploads with a request in flight. `uploadPendingNote` suspends on the
+    /// network; a second call for the same id in that gap — Stop's own upload
+    /// plus a retry pass, or two retry passes triggered together — would insert
+    /// the note twice, since the queue entry is only removed once the first
+    /// insert returns.
+    private var uploadsInFlight: Set<UUID> = []
     private var startedAt: Date?
     private var elapsedTimerTask: Task<Void, Never>?
     private var pathMonitor: NWPathMonitor?
@@ -155,11 +168,13 @@ final class RecordingManager {
             )
         }
 
+        finishingSessionIds.insert(id)
         Task {
             let transcript = await transcriber.finish()
             store.updateTranscript(id, transcript: transcript, segments: transcriber.segments)
             store.setStatus(id, .pendingUpload)
             liveTranscript = ""
+            finishingSessionIds.remove(id)
             await uploadPendingNote(id)
         }
     }
@@ -187,7 +202,8 @@ final class RecordingManager {
     /// final and uploaded. Skips the currently-active recording.
     func processPendingNotes() async {
         reloadPendingUploads()
-        for note in store.pendingNotes() where note.id != activeSessionId {
+        for note in store.pendingNotes()
+        where note.id != activeSessionId && !finishingSessionIds.contains(note.id) {
             if note.status == .recording {
                 store.setStatus(note.id, .pendingUpload)
             }
@@ -196,6 +212,10 @@ final class RecordingManager {
     }
 
     private func uploadPendingNote(_ id: UUID) async {
+        guard !uploadsInFlight.contains(id) else { return }
+        uploadsInFlight.insert(id)
+        defer { uploadsInFlight.remove(id) }
+
         guard let note = store.note(id) else {
             dropPendingUpload(id)
             return
