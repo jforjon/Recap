@@ -289,29 +289,38 @@ struct ProjectDetailView: View {
 
                 MarkdownText(markdown: summary)
 
-                Button(isGeneratingSummary ? "Generating…" : "Update summary") {
-                    Task { await generateSummary() }
-                }
-                .buttonStyle(.appSecondary)
-                .disabled(isGeneratingSummary || notes.isEmpty)
+                // Three equal small pills: the summary is the content, so its
+                // actions stay quiet rather than one full-width button
+                // outranking the text above it.
+                HStack(spacing: Spacing.sm) {
+                    Button {
+                        Task { await generateSummary() }
+                    } label: {
+                        Label(isGeneratingSummary ? "Updating…" : "Update", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.appSecondarySmall)
+                    .disabled(isGeneratingSummary || notes.isEmpty)
 
-                HStack(spacing: Spacing.s5) {
-                    Button(copiedSummary ? "Copied" : "Copy summary") {
+                    Button {
                         UIPasteboard.general.string = summary
                         copiedSummary = true
                         Task {
                             try? await Task.sleep(for: .seconds(2))
                             copiedSummary = false
                         }
+                    } label: {
+                        Label(copiedSummary ? "Copied" : "Copy", systemImage: copiedSummary ? "checkmark" : "doc.on.doc")
                     }
                     .buttonStyle(.appSecondarySmall)
 
-                    Button("Delete summary") {
+                    Button {
                         showDeleteSummaryConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
                     .buttonStyle(.appDestructiveSmall)
                 }
-                .padding(.top, Spacing.xs)
+                .padding(.top, Spacing.sm)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else if notes.isEmpty {
