@@ -1,12 +1,16 @@
+import Combine
+import CoreData
 import SwiftUI
 
 struct AppShellView: View {
-    let authManager: AuthManager
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var recordingManager = RecordingManager()
     @State private var importManager = AudioImportManager()
     @State private var nav = AppNavigationModel()
     @State private var projects: [ProjectWithNoteCount] = []
+    /// The one-off "bring your old recordings across" prompt. Asked once per
+    /// launch until it's done; "Not now" leaves it for next time and in Settings.
+    @State private var showLegacyImport = SupabaseImport.shouldOfferOnLaunch
 
     /// Screens pushed onto the iPhone navigation stack. On compact width there
     /// is no sidebar: Library is the root and everything else pushes on top.
@@ -46,6 +50,15 @@ struct AppShellView: View {
         // Warmed here rather than in the picker: the language a recording starts
         // in has to be known before the first tap, wherever it's started from.
         .task { await SpokenLanguageStore.shared.loadAvailable() }
+        // CloudKit imports changes from the user's other devices in the
+        // background, and Settings can delete everything from under the Library.
+        // Either way the store changed without any screen here doing it, so
+        // reload the Library and the sidebar the same way a project edit does.
+        .onReceive(Self.storeChangedElsewhere) { _ in nav.projectsVersion += 1 }
+        .sheet(isPresented: $showLegacyImport) { LegacyImportSheet() }
+        #if DEBUG
+        .task { if DemoMode.recording { recordingManager.startDemoSession() } }
+        #endif
     }
 
     /// iPad / Mac: the full 3-column layout.
@@ -66,7 +79,7 @@ struct AppShellView: View {
     /// model; the onChange adapters below turn those selections into pushes.
     private var compactStack: some View {
         NavigationStack(path: $path) {
-            LibraryContentView(nav: nav, authManager: authManager,
+            LibraryContentView(nav: nav,
                                importManager: importManager,
                                recordingManager: recordingManager)
                 .safeAreaInset(edge: .bottom) { recordingBar }
@@ -149,7 +162,7 @@ struct AppShellView: View {
     private var content: some View {
         switch nav.sidebarSelection {
         case .none, .library:
-            LibraryContentView(nav: nav, authManager: authManager,
+            LibraryContentView(nav: nav,
                                importManager: importManager,
                                recordingManager: recordingManager)
                 .safeAreaInset(edge: .bottom) { recordingBar }
@@ -169,6 +182,19 @@ struct AppShellView: View {
             ContentUnavailableView("Select a recording", systemImage: "waveform")
         }
     }
+
+    /// Debounced, because a sync arrives as a burst of remote-change
+    /// notifications rather than one. Static so a redraw doesn't resubscribe
+    /// and reset the debounce.
+    private static let storeChangedElsewhere: AnyPublisher<Void, Never> = {
+        let center = NotificationCenter.default
+        return center.publisher(for: .NSPersistentStoreRemoteChange)
+            .merge(with: center.publisher(for: StorageService.didDeleteAllData))
+            .merge(with: center.publisher(for: StorageService.didImport))
+            .map { _ in () }
+            .debounce(for: .seconds(1), scheduler: DispatchQueue.main)
+            .eraseToAnyPublisher()
+    }()
 
     private func loadProjects() async {
         projects = (try? await StorageService.getProjectsWithNoteCounts()) ?? []

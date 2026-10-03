@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import Supabase
 
 struct ProjectDetailView: View {
     let projectId: UUID

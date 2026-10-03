@@ -1,5 +1,4 @@
 import SwiftUI
-import Supabase
 
 struct NoteDetailView: View {
     let noteId: UUID

@@ -134,7 +134,65 @@ and one would never live in the app binary.
 
 ---
 
-## Phase 2 — Replace Supabase with SwiftData + CloudKit
+## Phase 2 — Code DONE (2026-10-03), awaiting device verification
+
+Supabase is gone from the app. Data is SwiftData (`Core/Storage/Records.swift`)
+mirrored to the private CloudKit database through `RecapStore`; `StorageService`
+keeps every function name and signature, so the screens barely changed.
+`AuthManager`, `SignInView`, `SupabaseService`, the Account screen, the Supabase
+SPM package and `supabase/` are deleted. The app opens straight into
+`AppShellView`.
+
+How the three "way back to a server" rules landed: every record has its own
+app-generated `id: UUID` plus `createdAt`/`updatedAt`; links are stored as plain
+`projectId`/`noteId` attributes **with no SwiftData relationships at all** (simpler
+under CloudKit, and they map straight onto Postgres columns — cascades are done by
+hand in `StorageService`); value types keep their snake_case `CodingKeys`.
+
+Also changed along the way:
+
+- **Settings → Your data** replaces Account: says where data lives, and offers
+  **Delete all data** (store, then Keychain key, recording journal, saved audio).
+- **Recording durability**: a recording is saved under the id it was captured
+  with, so audio never needs renaming, and `saveNote` is idempotent on id. The
+  `NWPathMonitor` and `didBecomeActive` retries are gone; the journal is replayed
+  on launch only.
+- **Keychain**: the key is stored under a fixed account. Lookups match on the
+  service alone, so a key saved under an old Supabase user id is still found.
+- **Demo mode** (`-demoMode`) now seeds an in-memory store instead of
+  intercepting every `StorageService` call. `-demoSignedOut` is gone.
+- The iCloud entitlement is on (CloudKit + iCloud Documents + `aps-environment`),
+  and `remote-notification` is a background mode, so Phase 3 is mostly done too.
+
+**Still to do:**
+
+1. Register the container and enable iCloud on the App ID (Phase 3 steps 1–2).
+2. Confirm `DEVELOPMENT_TEAM` in `project.yml` is the paid team.
+3. Verify on a device: record → note appears; kill mid-recording → recovered on
+   relaunch; second device (or reinstall) → data syncs back from iCloud.
+4. Before the first TestFlight/App Store build, deploy the CloudKit schema to
+   **production** in the CloudKit Console. After that, model changes must be
+   additive only.
+5. Import the Supabase-era recordings (below), then delete the Supabase project
+   and the Vercel project.
+
+**Existing data — changed 2026-10-03: bring it across.** The original decision
+was to abandon it; the developer decided to keep it after all. The app imports
+it itself (`Core/Storage/SupabaseImport.swift`, `LegacyImportSheet`,
+`StorageService.importLegacy`): if the old build's Supabase session is still in
+the Keychain, a sheet at launch offers a one-tap import; otherwise Settings →
+Your data → "Import from the earlier version" signs in with the old email and
+password. Plain REST, no Supabase package. Ids and dates are kept, so filing,
+personal notes and saved audio line up; re-running skips what's there.
+It needs `SUPABASE_PROJECT_REF` / `SUPABASE_ANON_KEY` back in Info.plist and the
+Supabase project un-paused. **Once the data is across, delete all of it** —
+those files, the two Info.plist keys, and `AppConfig.legacySupabase` — before
+any public release.
+
+<details>
+<summary>Original Phase 2 steps, for reference</summary>
+
+### Phase 2 — Replace Supabase with SwiftData + CloudKit
 
 **Goal:** zero infrastructure, zero cost, nothing to reactivate. Two to three days.
 
@@ -142,6 +200,8 @@ and one would never live in the app binary.
    CloudKit constraints: every property needs a default value or must be
    optional, no unique constraints, and all relationships must be optional.
    Keep `TranscriptSegment` as a `Codable` value stored on the note.
+   Follow the three rules in "Keeping a way back to a server" below — own
+   UUIDs, `createdAt`/`updatedAt` on every model, same field names.
 2. **Rewrite `StorageService`** against SwiftData, keeping the existing function
    names and signatures. All 33 call sites go through this one seam — if the
    signatures hold, the feature screens barely change. Cancellation handling
@@ -168,6 +228,8 @@ and one would never live in the app binary.
 the developer's own test data. No export, no importer, no migration path. Delete
 the Supabase project once Phase 2 is verified on a device.
 
+</details>
+
 ---
 
 ## Phase 3 — Finish the iCloud audio story
@@ -181,6 +243,53 @@ the Supabase project once Phase 2 is verified on a device.
 A container identifier is **per-app, not per-user**: register it once and Apple
 gives every Apple Account its own isolated private copy. The developer has no
 access to any user's container contents.
+
+---
+
+## Keeping a way back to a server
+
+Going local-first is not a one-way door for users' data. If the app ever needs
+a server again (for example, it starts earning and a web version becomes worth
+building), a later app update can move everyone's data to Supabase without
+losing anything. This section records how, and the three things Phase 2 must do
+now so that move stays cheap. **It is not a plan to add a server** — the
+no-backend decision above stands.
+
+### How a later move would work
+
+1. Add sign-in (Sign in with Apple is the easiest).
+2. On a user's first sign-in, the app uploads their notes, projects and
+   personal notes from SwiftData to Supabase.
+3. The local copy is kept until the upload is confirmed — the same
+   save-locally-then-upload-with-retry pattern `PendingNoteStore` uses today.
+
+What to expect:
+
+- **The move happens on each user's device, through the app.** iCloud private
+  data can't be reached from the developer's side, so there is no server-side
+  bulk migration. A user's data moves only when they open an updated build.
+- **Users who never update or never sign in simply stay local.** Nothing is lost;
+  their data stays where it already was.
+- **Accounts bring back what Phase 2 removes:** a sign-in screen, in-app account
+  deletion (App Store guideline 5.1.1(v)), and a privacy policy that covers the
+  server.
+
+### Three things to do in Phase 2 so the move stays easy
+
+1. **Every model keeps its own `id: UUID`, created by the app.** Don't rely on
+   SwiftData's internal `persistentModelID`. The same UUID becomes the Supabase
+   row id, so nothing duplicates and links (note → project, personal note →
+   owner) survive the upload. Store relationship ids alongside the SwiftData
+   relationships (`projectId`, `noteId`) so they can be written straight to
+   Postgres columns.
+2. **Every model has `createdAt` and `updatedAt`.** `Project` has both today;
+   `Note` and `PersonalNote` have only `createdAt`, so add `updatedAt` to them and
+   set it on every write. An upload uses it to decide which copy is newer.
+3. **Keep the `StorageService` seam.** Screens never talk to SwiftData directly —
+   only through `StorageService`, with the same function names and signatures.
+   A future move back to a server then touches that one file, not the 33 call
+   sites. Keep model field names matching the current Postgres columns (via
+   the existing snake_case `CodingKeys`) so the shapes still line up.
 
 ---
 

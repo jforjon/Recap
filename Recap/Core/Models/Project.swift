@@ -2,7 +2,6 @@ import Foundation
 
 struct Project: Codable, Identifiable, Hashable {
     let id: UUID
-    let userId: UUID
     var name: String
     var notes: String?
     let createdAt: String
@@ -10,7 +9,6 @@ struct Project: Codable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id
-        case userId = "user_id"
         case name
         case notes
         case createdAt = "created_at"

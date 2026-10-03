@@ -126,15 +126,8 @@ final class AudioImportManager {
                 Task { @MainActor in self?.updateProgress(job.id, fraction) }
             }
 
-            guard let userId = try? await SupabaseService.client.auth.session.user.id else {
-                throw AudioFileTranscriber.TranscribeError(
-                    message: "You need to be signed in to save an imported recording."
-                )
-            }
-
             let saved = try await StorageService.saveNote(
                 NoteInsert(
-                    userId: userId,
                     projectId: job.projectId,
                     title: job.title,
                     summary: "",

@@ -1,5 +1,4 @@
 import Foundation
-import Supabase
 
 /// Fills in what a recording can't know about itself at the moment it starts:
 /// its title, and who was speaking.

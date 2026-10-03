@@ -1,8 +1,10 @@
 import Foundation
 
-/// Durable, on-disk queue of recording transcripts. This is the durability layer:
-/// a transcript is written here as it's spoken and is not removed until the note
-/// is fully saved to Supabase, so a recording survives app kills and network loss.
+/// Durable, on-disk journal of recording transcripts. This is the crash-recovery
+/// layer: a transcript is written here as it's spoken and is not removed until
+/// the note is saved to the store, so a recording survives the app being killed.
+/// Kept apart from SwiftData on purpose — a half-finished recording should never
+/// sync to the user's other devices.
 /// No audio is stored — only text, so the footprint is tiny.
 final class PendingNoteStore {
     static let shared = PendingNoteStore()
@@ -68,15 +70,13 @@ final class PendingNoteStore {
         saveAllUnlocked(all)
     }
 
-    /// Drops the whole queue. Used when the account itself is going away, where
-    /// retrying an upload for a user that no longer exists would only fail.
+    /// Drops the whole queue. Used when the user deletes all their data.
     func removeAll() {
         lock.lock(); defer { lock.unlock() }
         try? fileManager.removeItem(at: manifestURL)
     }
 
-    /// Every queued recording — retried on launch, on regaining connectivity, and
-    /// when the app returns to the foreground.
+    /// Every queued recording — saved on the next launch.
     func pendingNotes() -> [PendingNote] {
         loadAll()
     }

@@ -1,9 +1,7 @@
 import SwiftUI
-import Supabase
 
 struct LibraryContentView: View {
     let nav: AppNavigationModel
-    let authManager: AuthManager
     let importManager: AudioImportManager
     let recordingManager: RecordingManager
 
@@ -134,7 +132,7 @@ struct LibraryContentView: View {
             }
         }
         .navigationDestination(isPresented: $showSettings) {
-            SettingsView(authManager: authManager)
+            SettingsView()
         }
         .audioImporter(isPresented: $showImportPicker, importManager: importManager)
         .sheet(isPresented: $showNewProject) {

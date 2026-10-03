@@ -10,7 +10,6 @@ enum ReactionType: String, Codable {
 
 struct Note: Codable, Identifiable, Hashable {
     let id: UUID
-    let userId: UUID
     var projectId: UUID?
     var title: String
     var eventName: String?
@@ -28,7 +27,6 @@ struct Note: Codable, Identifiable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id
-        case userId = "user_id"
         case projectId = "project_id"
         case title
         case eventName = "event_name"
@@ -44,8 +42,11 @@ struct Note: Codable, Identifiable, Hashable {
 }
 
 /// Payload for inserting a new note — mirrors toInsertPayload() in storage.ts.
-struct NoteInsert: Encodable {
-    let userId: UUID
+struct NoteInsert {
+    /// Chosen by the caller so a recording keeps the id it was captured under —
+    /// its audio file is already named by it — and so saving the same recording
+    /// twice finds the first copy instead of making a second.
+    var id = UUID()
     let projectId: UUID?
     let title: String
     let summary: String
@@ -56,18 +57,4 @@ struct NoteInsert: Encodable {
     let category: NoteCategory?
     let personalReaction: String?
     let reactionType: ReactionType?
-
-    enum CodingKeys: String, CodingKey {
-        case userId = "user_id"
-        case projectId = "project_id"
-        case title
-        case summary
-        case transcript
-        case transcriptSegments = "transcript_segments"
-        case eventName = "event_name"
-        case speakerContext = "speaker_context"
-        case category
-        case personalReaction = "personal_reaction"
-        case reactionType = "reaction_type"
-    }
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A recording that has been sent but hasn't landed in Supabase yet.
+/// A recording that has been stopped but hasn't landed in the library yet.
 ///
 /// It carries its placeholder date title, because the real one is generated from
 /// the transcript after the save. Shown for the same reason the import rows are:
@@ -23,7 +23,7 @@ struct PendingRecordingRow: View {
                 .foregroundStyle(AppColors.textPrimary)
 
             Text(upload.isWaiting
-                 ? "Saved on this phone. It uploads as soon as you’re back online."
+                 ? "Kept on this phone. It’s added to your library next time recap opens."
                  : "Saving to your library…")
                 .appTextStyle(.small)
                 .foregroundStyle(AppColors.textTertiary)

@@ -17,13 +17,15 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>FEEDBACK_SCRIPT_ID</key>
 	<string>$(FEEDBACK_SCRIPT_ID)</string>
 	<key>FEEDBACK_SECRET</key>
 	<string>$(FEEDBACK_SECRET)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>recap needs microphone access to record talks and sessions.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
@@ -43,6 +45,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>remote-notification</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

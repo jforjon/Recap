@@ -52,9 +52,8 @@ final class AudioSettings {
 /// Owns the audio files: where they live, moving them when the user changes their
 /// mind, and getting them back out of iCloud when the system has evicted them.
 ///
-/// Files are named by note id. During recording that's the pending note's local
-/// id; once the note reaches Supabase it is renamed to the server id, which is
-/// what every screen afterwards looks it up by.
+/// Files are named by note id. A recording is saved under the id it was
+/// captured with, so the file is named correctly from its first byte.
 enum AudioStore {
     private static let folderName = "Audio"
 
@@ -141,14 +140,6 @@ enum AudioStore {
     }
 
     // MARK: - Mutation
-
-    /// Called once a pending recording gets its real Supabase id.
-    static func rename(from oldId: UUID, to newId: UUID) {
-        guard let source = existingURL(for: oldId) else { return }
-        let destination = source.deletingLastPathComponent().appendingPathComponent(filename(newId))
-        try? FileManager.default.removeItem(at: destination)
-        try? FileManager.default.moveItem(at: source, to: destination)
-    }
 
     static func delete(_ id: UUID) {
         let name = filename(id)

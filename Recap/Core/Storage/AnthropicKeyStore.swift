@@ -3,12 +3,9 @@ import Security
 
 /// The user's own Anthropic API key, for the bring-your-own-key path.
 ///
-/// An API key is spendable money, so unlike the rest of `user_settings` this one
-/// is deliberately *never* written to Postgres. It lives only in this device's
-/// Keychain and is handed to our own API as a per-request `X-Anthropic-Key`
-/// header when a BYOK user asks for a summary. A breach of the database — or a
-/// leaked service_role key, or an old backup — therefore exposes no user keys,
-/// and the server holds the value only for the life of one request.
+/// An API key is spendable money, so it is deliberately kept out of the synced
+/// store. It lives only in this device's Keychain and is sent straight to
+/// Anthropic by `AnthropicClient` — no server of ours ever sees it.
 ///
 /// `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` keeps the item out of iCloud
 /// Keychain and out of device backups: the key never leaves this phone. The cost
@@ -31,17 +28,19 @@ enum AnthropicKeyStore {
             && !key.contains(where: \.isWhitespace)
     }
 
-    /// Stores (or replaces) the signed-in user's key.
+    /// Stores (or replaces) the key.
     static func save(_ key: String) async throws {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard isPlausible(trimmed) else {
             throw KeyError(message: "That doesn't look like an Anthropic API key. Keys start with \"sk-ant-\".")
         }
 
-        var query = try await baseQuery()
+        var query = baseQuery()
         // Replace rather than update: a delete-then-add is one code path for both
         // "first key" and "pasted a new one", and can't leave a stale value behind.
+        // The delete matches every account, so it also sweeps up a legacy item.
         SecItemDelete(query as CFDictionary)
+        query[kSecAttrAccount as String] = account
         query[kSecValueData as String] = Data(trimmed.utf8)
         query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
@@ -51,9 +50,9 @@ enum AnthropicKeyStore {
         }
     }
 
-    /// The stored key, or nil when the user is on platform credits instead.
+    /// The stored key, or nil when none has been set.
     static func load() async throws -> String? {
-        var query = try await baseQuery()
+        var query = baseQuery()
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -72,27 +71,32 @@ enum AnthropicKeyStore {
     /// Whether a key is stored, without pulling the secret into memory. Settings
     /// only needs to render "Set" / "Not set", so it should never hold the value.
     static func isSet() async throws -> Bool {
-        let query = try await baseQuery()
+        #if DEBUG
+        if DemoMode.isOn { return true }
+        #endif
+        let query = baseQuery()
         return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
     }
 
-    /// Removes the key. Call before signing out, while the user id still resolves.
+    /// Removes the key.
     static func clear() async throws {
-        let query = try await baseQuery()
+        let query = baseQuery()
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else {
             throw KeyError(message: "Could not remove the key from this device's Keychain (\(status)).")
         }
     }
 
-    /// Scoped to the user id so signing in as a different account on a shared
-    /// device can never surface the previous account's key.
-    private static func baseQuery() async throws -> [String: Any] {
-        let userId = try await StorageService.currentUserId()
-        return [
+    /// With no accounts there is one key per device, saved under a fixed
+    /// account name. Lookups match on the service alone, so a key saved by an
+    /// earlier build — under the Supabase user id it was scoped to then — is
+    /// still found, and is replaced or cleared along with it.
+    private static func baseQuery() -> [String: Any] {
+        [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: userId.uuidString,
         ]
     }
+
+    private static let account = "default"
 }

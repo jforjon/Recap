@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import Network
 import UIKit
 
 struct RecordingError: LocalizedError {
@@ -10,9 +9,10 @@ struct RecordingError: LocalizedError {
 
 /// Orchestrates on-device live transcription and durable note saving. Speech is
 /// transcribed entirely on device (no network, no third-party API), and the
-/// transcript is persisted to disk as it's spoken — so losing signal, locking the
-/// phone, or the app being killed never loses work. The note is uploaded to
-/// Supabase when possible and retried on launch, reconnect, and foreground.
+/// transcript is persisted to disk as it's spoken — so locking the phone or the
+/// app being killed never loses work. On Stop the note is saved to the local
+/// store, which CloudKit syncs in the background; a recording interrupted by a
+/// crash is saved on the next launch instead.
 @MainActor
 @Observable
 final class RecordingManager {
@@ -21,19 +21,19 @@ final class RecordingManager {
         case recording
     }
 
-    /// A finished recording that hasn't reached Supabase yet.
+    /// A finished recording that hasn't reached the store yet.
     ///
-    /// The upload takes a moment — longer with no signal, forever until the user
-    /// signs in — and a recording that is invisible until it lands reads as lost.
-    /// Lists render these as rows, so a recording appears the instant it is sent.
+    /// The transcriber takes a moment to flush after Stop, and a recording that
+    /// is invisible until it lands reads as lost. Lists render these as rows, so
+    /// a recording appears the instant it is stopped.
     struct PendingUpload: Identifiable, Equatable {
         let id: UUID
         let projectId: UUID?
         /// The placeholder date title; the real one is generated after the save.
         let title: String
         let createdAt: Date
-        /// An attempt has already failed. It stays queued and retries on
-        /// reconnect, foreground and launch — this only changes what the row says.
+        /// An attempt has already failed. It stays queued and is retried on the
+        /// next launch — this only changes what the row says.
         var isWaiting: Bool
     }
 
@@ -45,9 +45,9 @@ final class RecordingManager {
     /// Not a history: the bars oscillate in place rather than scrolling, so only
     /// the present level matters.
     private(set) var audioLevel: CGFloat = 0
-    /// Recordings queued for upload, newest last.
+    /// Recordings queued to be saved, newest last.
     private(set) var pendingUploads: [PendingUpload] = []
-    /// Bumped whenever a recording lands in Supabase, or is renamed by the
+    /// Bumped whenever a recording is saved, or is renamed by the
     /// enricher afterwards, so any open list reloads instead of waiting for a
     /// pull-to-refresh.
     private(set) var savedVersion = 0
@@ -66,20 +66,16 @@ final class RecordingManager {
     private var activeProjectId: UUID?
     /// Recordings whose transcriber is still being flushed after Stop. They sit
     /// in the store as `.recording` with no `activeSessionId`, which is exactly
-    /// what an interrupted recording looks like — so without this, a retry pass
-    /// landing in that window (the app foregrounding, the network monitor
-    /// firing) would "recover" the half-flushed transcript as its own note, and
-    /// the real one would follow as a duplicate.
+    /// what an interrupted recording looks like — so without this, the launch
+    /// recovery pass landing in that window would "recover" the half-flushed
+    /// transcript as its own note.
     private var finishingSessionIds: Set<UUID> = []
-    /// Uploads with a request in flight. `uploadPendingNote` suspends on the
-    /// network; a second call for the same id in that gap — Stop's own upload
-    /// plus a retry pass, or two retry passes triggered together — would insert
-    /// the note twice, since the queue entry is only removed once the first
-    /// insert returns.
-    private var uploadsInFlight: Set<UUID> = []
+    /// Saves under way. `savePendingNote` suspends, and Stop's own save plus the
+    /// launch recovery pass could otherwise reach the same id together. (The
+    /// store's save is idempotent on id as well; this keeps the rows tidy.)
+    private var savesInFlight: Set<UUID> = []
     private var startedAt: Date?
     private var elapsedTimerTask: Task<Void, Never>?
-    private var pathMonitor: NWPathMonitor?
 
     init() {
         transcriber.onUpdate = { [weak self] finalized, volatile in
@@ -96,16 +92,10 @@ final class RecordingManager {
             self?.pushAudioLevel(CGFloat(level))
         }
 
-        // Anything left queued from a previous launch is shown straight away,
-        // before the retry below has had a chance to clear it.
+        // Anything left queued from a previous launch — a recording the app was
+        // killed during — is shown straight away, then saved.
         reloadPendingUploads()
         Task { await processPendingNotes() }
-        startNetworkMonitor()
-        NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            Task { await self?.processPendingNotes() }
-        }
     }
 
     // MARK: - Controls
@@ -129,8 +119,7 @@ final class RecordingManager {
         liveTranscript = ""
         resetAudioLevel()
 
-        // Named by the pending id for now; renamed to the Supabase id once the
-        // note is saved, which is what every screen looks it up by afterwards.
+        // The note is saved under this same id, so the audio never needs renaming.
         let audioURL = AudioStore.newFileURL(for: id)
 
         do {
@@ -158,7 +147,7 @@ final class RecordingManager {
         resetAudioLevel()
 
         // Queued synchronously, so the row is on screen by the time the capture
-        // screen finishes dismissing — flushing the transcriber and the upload
+        // screen finishes dismissing — flushing the transcriber and the save
         // itself both happen after this.
         if let note = store.note(id) {
             pendingUploads.append(
@@ -175,7 +164,7 @@ final class RecordingManager {
             store.setStatus(id, .pendingUpload)
             liveTranscript = ""
             finishingSessionIds.remove(id)
-            await uploadPendingNote(id)
+            await savePendingNote(id)
         }
     }
 
@@ -195,11 +184,11 @@ final class RecordingManager {
         }
     }
 
-    // MARK: - Durable upload / retry
+    // MARK: - Durable save / recovery
 
-    /// Saves any queued recordings to Supabase. Recordings interrupted mid-capture
-    /// (app killed) are recovered here: their persisted transcript is treated as
-    /// final and uploaded. Skips the currently-active recording.
+    /// Saves any queued recordings. Recordings interrupted mid-capture (app
+    /// killed) are recovered here: their persisted transcript is treated as
+    /// final and saved. Skips the currently-active recording.
     func processPendingNotes() async {
         reloadPendingUploads()
         for note in store.pendingNotes()
@@ -207,14 +196,14 @@ final class RecordingManager {
             if note.status == .recording {
                 store.setStatus(note.id, .pendingUpload)
             }
-            await uploadPendingNote(note.id)
+            await savePendingNote(note.id)
         }
     }
 
-    private func uploadPendingNote(_ id: UUID) async {
-        guard !uploadsInFlight.contains(id) else { return }
-        uploadsInFlight.insert(id)
-        defer { uploadsInFlight.remove(id) }
+    private func savePendingNote(_ id: UUID) async {
+        guard !savesInFlight.contains(id) else { return }
+        savesInFlight.insert(id)
+        defer { savesInFlight.remove(id) }
 
         guard let note = store.note(id) else {
             dropPendingUpload(id)
@@ -232,14 +221,10 @@ final class RecordingManager {
             alertMessage = "Nothing was transcribed, so that recording wasn't saved. No speech was picked up — check that the recording language matches what was spoken, and that nothing was covering the microphone."
             return
         }
-        guard let userId = try? await SupabaseService.client.auth.session.user.id else {
-            markPendingUploadWaiting(id) // not signed in / offline — stays queued
-            return
-        }
 
         // Saved transcript-only: no summary yet (the user opts into that later).
         let insert = NoteInsert(
-            userId: userId,
+            id: id,
             projectId: note.projectId,
             title: note.title,
             summary: "",
@@ -254,9 +239,6 @@ final class RecordingManager {
 
         do {
             let saved = try await StorageService.saveNote(insert)
-            // The audio was written under the local pending id; move it to the
-            // server id now that one exists, so the detail screen can find it.
-            AudioStore.rename(from: id, to: saved.id)
             store.remove(id)
             // The real row replaces the "Saving…" one in the same update, so the
             // recording never disappears from the list in between.
@@ -264,7 +246,7 @@ final class RecordingManager {
             publish(saved)
 
             // Detached from the save: naming needs a key and a connection, and
-            // the recording must be safe on the server before either is asked
+            // the recording must be safe in the store before either is asked
             // for. If this fails the note simply keeps its date title, and the
             // detail screen tries again next time it's opened.
             Task {
@@ -273,7 +255,7 @@ final class RecordingManager {
                 }
             }
         } catch {
-            // Left in the queue; retried on next launch / reconnect / foreground.
+            // Left in the queue; retried on next launch.
             markPendingUploadWaiting(id)
         }
     }
@@ -318,7 +300,7 @@ final class RecordingManager {
         pendingUploads[index].isWaiting = true
     }
 
-    // MARK: - Timers & monitors
+    // MARK: - Timers
 
     private func startElapsedTimer() {
         elapsedTimerTask = Task { [weak self] in
@@ -334,16 +316,6 @@ final class RecordingManager {
     private func stopElapsedTimer() {
         elapsedTimerTask?.cancel()
         elapsedTimerTask = nil
-    }
-
-    private func startNetworkMonitor() {
-        let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { [weak self] path in
-            guard path.status == .satisfied else { return }
-            Task { @MainActor in await self?.processPendingNotes() }
-        }
-        monitor.start(queue: DispatchQueue(label: "com.echo.network-monitor"))
-        pathMonitor = monitor
     }
 
     // MARK: - Waveform
@@ -373,3 +345,16 @@ final class RecordingManager {
         return "Recording · \(formatter.string(from: date))"
     }
 }
+
+#if DEBUG
+extension RecordingManager {
+    /// Puts the capture screen up mid-talk for screenshots, without touching the
+    /// mic — the Simulator has no speech models to record with anyway.
+    func startDemoSession() {
+        phase = .recording
+        elapsed = 14 * 60 + 32
+        liveTranscript = DemoMode.liveTranscript
+        audioLevel = 0.62
+    }
+}
+#endif

@@ -12,9 +12,6 @@ import SwiftUI
 /// edit mode. With every editable thing behind its own push there is no shared
 /// mode left to leak.
 struct SettingsView: View {
-    let authManager: AuthManager
-
-    @State private var email = ""
     @State private var hasAnthropicKey = false
 
     // Both stores are observable, so a change made two screens down redraws
@@ -32,7 +29,7 @@ struct SettingsView: View {
             captureGroup
             intelligenceGroup
             supportGroup
-            accountGroup
+            dataGroup
 
             Text(Self.versionString)
                 .appTextStyle(.mono)
@@ -43,6 +40,9 @@ struct SettingsView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
+        .onReceive(NotificationCenter.default.publisher(for: StorageService.didDeleteAllData)) { _ in
+            hasAnthropicKey = false
+        }
     }
 
     // MARK: - Groups
@@ -97,12 +97,12 @@ struct SettingsView: View {
         }
     }
 
-    private var accountGroup: some View {
+    private var dataGroup: some View {
         VStack(alignment: .leading, spacing: Spacing.s2) {
-            SettingsGroupLabel(title: "Account")
+            SettingsGroupLabel(title: "Data")
             SettingsCard {
-                SettingsLinkRow(title: email.isEmpty ? "Account" : email) {
-                    AccountView(authManager: authManager, email: $email)
+                SettingsLinkRow(title: "Your data") {
+                    DataView()
                 }
             }
         }
@@ -131,9 +131,6 @@ struct SettingsView: View {
     }
 
     private func load() async {
-        if case let .signedIn(_, userEmail) = authManager.state {
-            email = userEmail ?? ""
-        }
         await languages.loadAvailable()
         hasAnthropicKey = (try? await AnthropicKeyStore.isSet()) ?? false
     }
